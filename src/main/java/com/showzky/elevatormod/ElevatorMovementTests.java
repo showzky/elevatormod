@@ -158,8 +158,6 @@ public final class ElevatorMovementTests {
   level.setBlock(origin.east(2),ElevatorRegistries.FLOOR_CONNECTOR.get().defaultBlockState().setValue(FacingElevatorBlock.FACING,Direction.WEST),3);
   var pulley=(PoweredPulleyBlockEntity)level.getBlockEntity(pulleyPos);
   test.assertTrue(pulley.motion.assemble(),"Manual assembly must succeed");
-  pulley.motion.tick();test.assertTrue(pulley.motion.active(),"Manual assembly must remain virtual");
-  pulley.motion.request(origin.getY());
   level.setBlock(origin,net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(),3);
   pulley.motion.tick();
   test.assertTrue(pulley.motion.active() && pulley.motion.status.equals("Restoration blocked"),"Blocked parking must retain cabin and report status");
@@ -284,7 +282,6 @@ public final class ElevatorMovementTests {
     var saved=new net.minecraft.nbt.CompoundTag();pulley.motion.save(saved);pulley.motion.load(saved);
     test.assertTrue(pulley.motion.active(),"Serialized cabin must retain blocks");
     test.assertTrue(pulley.motion.parts.stream().anyMatch(part -> part.camouflage()!=null && part.camouflage().is(net.minecraft.world.level.block.Blocks.STONE)),"Saved moving cabin must retain camouflage");
-    test.assertTrue(saved.getBoolean("ParkWhenStopped"),"Pending auto-park must persist mid-trip");
     pulley.energy().receiveEnergy(10000,false);
    });
   });

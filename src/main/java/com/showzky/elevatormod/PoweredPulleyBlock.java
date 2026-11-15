@@ -54,9 +54,18 @@ public class PoweredPulleyBlock extends BaseEntityBlock {
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof PoweredPulleyBlockEntity pulley) {
             if (player.isShiftKeyDown()) { ElevatorControlMenu.open(player, pos, 0); return InteractionResult.CONSUME; }
-            if (!pulley.motion.active()) {
-                boolean assembled=pulley.motion.assemble();
-                player.displayClientMessage(Component.literal(assembled ? "Elevator assembled." : pulley.motion.status), false);
+            // The cabin only becomes virtual while travelling. A stationary virtual cabin (for
+            // example from older versions, which assembled on right-click) is parked back into
+            // real, solid, usable blocks.
+            if (pulley.motion.active()) {
+                if (Math.abs(pulley.motion.target - pulley.motion.y) > 1e-6) {
+                    player.displayClientMessage(Component.literal(pulley.motion.status), true);
+                } else if (pulley.motion.disassemble()) {
+                    player.displayClientMessage(Component.literal("Elevator parked."), false);
+                } else {
+                    pulley.sync();
+                    player.displayClientMessage(Component.literal(pulley.motion.status), false);
+                }
                 return InteractionResult.CONSUME;
             }
             if (pulley.attachment() != null) {

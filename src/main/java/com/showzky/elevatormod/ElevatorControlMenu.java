@@ -47,7 +47,7 @@ public final class ElevatorControlMenu extends AbstractContainerMenu {
    next.putBoolean("Connected",connected);
   }
   var p=pulley();
-  if(p!=null){next.putInt("Energy",p.energy().getEnergyStored());next.putInt("Capacity",p.energy().getMaxEnergyStored());next.putBoolean("Active",p.motion.active());next.putBoolean("CanTravel",p.motion.active());next.putDouble("Speed",p.motion.speed);next.putString("Status",p.motion.status);next.putDouble("Y",p.motion.y);next.putDouble("Target",p.motion.target);
+  if(p!=null){next.putInt("Energy",p.energy().getEnergyStored());next.putInt("Capacity",p.energy().getMaxEnergyStored());next.putBoolean("Active",p.motion.active());next.putBoolean("Connected",p.attachment()!=null);next.putBoolean("CanTravel",p.motion.active());next.putDouble("Speed",p.motion.speed);next.putString("Status",p.motion.status);next.putDouble("Y",p.motion.y);next.putDouble("Target",p.motion.target);
    ListTag floors=new ListTag();
    if(p.motion.active()) {
     for(var floor:p.motion.floors()){CompoundTag f=new CompoundTag();f.putInt("Y",floor.y());f.putString("Name",floor.name());floors.add(f);}
@@ -63,7 +63,7 @@ public final class ElevatorControlMenu extends AbstractContainerMenu {
     }
    }
    next.put("Floors",floors);
-  }else next.putString("Status","Not assembled");
+  }else next.putString("Status","Not connected");
   if(!next.equals(state)){state=next;net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(server,new ElevatorControlPayload(containerId,"state",next));}
  }
  public void action(String action,CompoundTag data){
@@ -71,8 +71,14 @@ public final class ElevatorControlMenu extends AbstractContainerMenu {
   if(kind==1 && action.equals("name") && player.level().getBlockEntity(pos) instanceof FloorConnectorBlockEntity be){String value=data.getString("Name");if(value.length()<=48){be.name=value.strip().replaceAll("[\\p{Cntrl}]", "");be.setChanged();}}
   var p=pulley();if(p==null)return;
   if(kind==0){
-   if(action.equals("assemble"))p.motion.assemble();
-   if(action.equals("disassemble"))p.motion.disassemble();
+   // Connecting links the pulley and lists floors; the cabin stays as real blocks until it travels.
+   if(action.equals("connect") && !p.motion.active()){
+    var scan=ElevatorAssembly.scan(player.level(),p.getBlockPos());
+    if(scan.attachment()!=null){p.connect(scan);p.motion.status="Connected";}
+    else p.motion.status="Connection failed: "+scan.error();
+    p.sync();
+   }
+   if(action.equals("park") && p.motion.active() && !p.motion.disassemble())p.sync();
    if(action.equals("speed")){p.motion.speed=ElevatorEnergyUsage.sanitizeSpeed(data.getDouble("Speed"));p.setChanged();p.sync();}
   }
   if(kind==2 && action.equals("travel")) {

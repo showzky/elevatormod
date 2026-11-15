@@ -25,9 +25,10 @@ public final class ElevatorCabinMotion {
     public double y, previousY, target, velocity;
     public double displayPreviousY, displayY;
     private boolean displayInitialized;
-    // Set false for development sessions that need the cabin to remain virtual at stops.
+    // The cabin is only virtual while travelling: a stopped cabin always parks back into real
+    // blocks, however it was assembled. Set false for development sessions that need the cabin
+    // to remain virtual at stops.
     public static final boolean AUTO_PARK_ENABLED = true;
-    private boolean parkWhenStopped;
     private long nextParkAttempt;
     private final java.util.ArrayDeque<Integer> callQueue = new java.util.ArrayDeque<>();
 
@@ -99,7 +100,7 @@ public final class ElevatorCabinMotion {
             if ((int)target!=stop && !callQueue.contains(stop)) callQueue.addLast(stop);
             owner.sync();return;
         }
-        target=stop; parkWhenStopped=AUTO_PARK_ENABLED; nextParkAttempt=0; status="Travelling"; owner.sync();
+        target=stop; nextParkAttempt=0; status="Travelling"; owner.sync();
     }
     public boolean hasCall(int stop) {
         return callQueue.contains(stop) || (active() && (int)target==stop && Math.abs(target-y)>1e-6);
@@ -122,9 +123,9 @@ public final class ElevatorCabinMotion {
         double remaining=target-y;
         if(Math.abs(remaining)<1e-6) {
             y=target; velocity=0;
-            if (parkWhenStopped && level.getGameTime() >= nextParkAttempt) {
+            if (AUTO_PARK_ENABLED && level.getGameTime() >= nextParkAttempt) {
                 if (!disassemble()) { nextParkAttempt=level.getGameTime()+20; owner.sync(); }
-            } else if (!parkWhenStopped && !status.equals("Ready")) { status="Ready"; owner.sync(); }
+            } else if (!AUTO_PARK_ENABLED && !status.equals("Ready")) { status="Ready"; owner.sync(); }
             return;
         }
         if(owner.energy().getEnergyStored()<ElevatorEnergyUsage.perTick(speed)) { velocity=0; status="Waiting for FE"; owner.sync(); return; }
@@ -180,17 +181,16 @@ public final class ElevatorCabinMotion {
             var be=level.getBlockEntity(pos);
             if(be!=null&&!p.data.isEmpty()){ CompoundTag data=p.data.copy();data.putInt("x",pos.getX());data.putInt("y",pos.getY());data.putInt("z",pos.getZ());be.loadWithComponents(data,level.registryAccess());be.setChanged(); }
         }
-        parts.clear(); parkWhenStopped=false; nextParkAttempt=0; status="Ready"; owner.arrived(at);return true;
+        parts.clear(); nextParkAttempt=0; status="Ready"; owner.arrived(at);return true;
     }
     public void save(CompoundTag tag) {
         tag.putIntArray("CallQueue",callQueue.stream().mapToInt(Integer::intValue).toArray());
-        tag.putBoolean("ParkWhenStopped",parkWhenStopped);
         tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);
         ListTag list=new ListTag();for(Part p:parts){CompoundTag t=new CompoundTag();t.putLong("Offset",p.offset.asLong());t.put("State",NbtUtils.writeBlockState(p.state));t.put("Data",p.data.copy());list.add(t);}tag.put("CabinParts",list);
     }
     public void load(CompoundTag tag) {
         callQueue.clear();for(int stop:tag.getIntArray("CallQueue")) callQueue.addLast(stop);
-        parkWhenStopped=tag.getBoolean("ParkWhenStopped"); nextParkAttempt=0;
+        nextParkAttempt=0;
         origin=BlockPos.of(tag.getLong("CabinOrigin"));previousY=y;y=tag.getDouble("CabinY");target=tag.getDouble("CabinTarget");speed=tag.contains("CabinSpeed")?ElevatorEnergyUsage.sanitizeSpeed(tag.getDouble("CabinSpeed")):ElevatorEnergyUsage.DEFAULT_SPEED;status=tag.getString("CabinStatus");if(!tag.contains("CabinParts"))return;parts.clear();
         for(Tag entry:tag.getList("CabinParts",10)){CompoundTag t=(CompoundTag)entry;parts.add(new Part(BlockPos.of(t.getLong("Offset")),NbtUtils.readBlockState(net.minecraft.core.registries.BuiltInRegistries.BLOCK.asLookup(),t.getCompound("State")),t.getCompound("Data")));}
     }

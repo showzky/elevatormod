@@ -34,7 +34,7 @@ public final class ElevatorControlScreen extends AbstractContainerScreen<Elevato
   }else if(menu.kind==0){
    lastServerSpeed=Double.NaN;
    speedSlider=addRenderableWidget(new SpeedSlider(leftPos+12,topPos+PULLEY_SLIDER_Y,192,20));
-   assembly=addRenderableWidget(Button.builder(Component.literal("Assemble"),b->send(menu.state.getBoolean("Active")?"disassemble":"assemble",new CompoundTag())).bounds(leftPos+12,topPos+192,192,20).build());
+   assembly=addRenderableWidget(Button.builder(Component.literal("Connect"),b->send(menu.state.getBoolean("Active")?"park":"connect",new CompoundTag())).bounds(leftPos+12,topPos+192,192,20).build());
   }else{
    for (int i=0; i<VISIBLE_FLOORS; i++) {
     final int row=i;
@@ -58,7 +58,7 @@ public final class ElevatorControlScreen extends AbstractContainerScreen<Elevato
    double server=menu.state.getDouble("Speed");
    if(server!=lastServerSpeed){lastServerSpeed=server;speedSlider.showServerSpeed(server);}
   }
-  if(assembly!=null)assembly.setMessage(Component.literal(menu.state.getBoolean("Active")?"Disassemble":"Assemble"));
+  if(assembly!=null)assembly.setMessage(Component.literal(menu.state.getBoolean("Active")?"Park":"Connect"));
   updateFloorButtons();
  }
  @Override protected void renderBg(GuiGraphics g,float partial,int mx,int my){
@@ -119,8 +119,9 @@ public final class ElevatorControlScreen extends AbstractContainerScreen<Elevato
   boolean active=menu.state.getBoolean("Active");
   String status=menu.state.getString("Status");
   boolean fault=status.startsWith("Waiting")||status.contains("blocked")||status.contains("Obstructed")||status.contains("unavailable")||status.contains("failed");
-  g.fill(x+12,y+168,x+18,y+174,active?0xff3fa34d:0xff8b8b8b);
-  text(g,active?"Structure assembled":"Not assembled",22,167,active?0xff267328:TEXT);
+  boolean connected=menu.state.getBoolean("Connected");
+  g.fill(x+12,y+168,x+18,y+174,active||connected?0xff3fa34d:0xff8b8b8b);
+  text(g,active?"Cabin moving":connected?"Connected":"Not connected",22,167,active||connected?0xff267328:TEXT);
   rightText(g,status,204,167,fault?0xffa32a2a:TEXT);
  }
  private void rightText(GuiGraphics g,String s,int right,int y,int color){
