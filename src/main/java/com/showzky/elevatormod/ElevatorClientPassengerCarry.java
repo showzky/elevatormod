@@ -9,13 +9,17 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
 /**
  * Carries the local player on a moving cabin. Players are client-authoritative, so the client
  * moves its own player by exactly the cabin movement it has received, before the player's own
  * movement runs. The player therefore stays on the floor this client collides with, instead of
  * being corrected towards the server's slightly different cabin position.
+ * <p>
+ * This must run after the player's previous position is recorded for the tick (entity tick
+ * pre-event), so the carry is part of the frame interpolation like the cabin's own movement.
+ * Carrying earlier makes the player and camera jump 20 times a second against a gliding cabin.
  */
 @EventBusSubscriber(modid = ElevatorMod.MOD_ID, value = Dist.CLIENT)
 public final class ElevatorClientPassengerCarry {
@@ -24,10 +28,9 @@ public final class ElevatorClientPassengerCarry {
     private static final Map<PoweredPulleyBlockEntity, Double> LAST_HEIGHT = new WeakHashMap<>();
 
     @SubscribeEvent
-    public static void beforeTick(ClientTickEvent.Pre event) {
+    public static void beforePlayerTick(EntityTickEvent.Pre event) {
         var minecraft = Minecraft.getInstance();
-        LocalPlayer player = minecraft.player;
-        if (minecraft.level == null || player == null) { LAST_HEIGHT.clear(); return; }
+        if (!(event.getEntity() instanceof LocalPlayer player) || player != minecraft.player || minecraft.level == null) return;
         for (var pulley : ElevatorCabinMotion.loaded(minecraft.level)) {
             var motion = pulley.motion;
             if (!motion.active()) { LAST_HEIGHT.remove(pulley); continue; }
