@@ -23,10 +23,42 @@ public class PoweredPulleyBlock extends BaseEntityBlock {
     @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
     @Override public @Nullable BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new PoweredPulleyBlockEntity(pos, state); }
     @Override public <T extends BlockEntity> @Nullable BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide ? null : createTickerHelper(type, ElevatorRegistries.PULLEY_ENTITY.get(), PoweredPulleyBlockEntity::tick);
+        return createTickerHelper(type, ElevatorRegistries.PULLEY_ENTITY.get(), (world, pos, tickState, pulley) -> { if (world.isClientSide) {
+            pulley.motion.clientTick();
+            if (pulley.motion.active()) ElevatorContraptionCollision.resolve(pulley.motion, world, pulley.motion.displayPreviousY, pulley.motion.displayY);
+        } else {
+            double before = pulley.motion.y;
+            PoweredPulleyBlockEntity.tick(world, pos, tickState, pulley);
+            if (pulley.motion.active()) ElevatorContraptionCollision.resolve(pulley.motion, world, before, pulley.motion.y);
+        } });
+    }
+    @Override public void onBlockExploded(BlockState state, Level level, BlockPos pos, net.minecraft.world.level.Explosion explosion) {
+        if (level.getBlockEntity(pos) instanceof PoweredPulleyBlockEntity pulley
+                && pulley.motion.active() && !pulley.motion.disassemble()) {
+            pulley.sync();
+            return;
+        }
+        super.onBlockExploded(state, level, pos, explosion);
+    }
+    @Override protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState replacement, boolean moved) {
+        if (!level.isClientSide && !state.is(replacement.getBlock())
+                && level.getBlockEntity(pos) instanceof PoweredPulleyBlockEntity pulley && pulley.motion.active()) {
+            // Covers direct replacements when restoration is possible. Breaks and explosions
+            // are separately intercepted before removal when restoration is not possible.
+            pulley.motion.disassemble();
+        }
+        if (!level.isClientSide && !state.is(replacement.getBlock()) && level.getBlockEntity(pos) instanceof PoweredPulleyBlockEntity pulley)
+            ElevatorLightPower.extinguishParked(pulley);
+        super.onRemove(state, level, pos, replacement, moved);
     }
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof PoweredPulleyBlockEntity pulley) {
+            if (player.isShiftKeyDown()) { ElevatorControlMenu.open(player, pos, 0); return InteractionResult.CONSUME; }
+            if (!pulley.motion.active()) {
+                boolean assembled=pulley.motion.assemble();
+                player.displayClientMessage(Component.literal(assembled ? "Elevator assembled." : pulley.motion.status), false);
+                return InteractionResult.CONSUME;
+            }
             if (pulley.attachment() != null) {
                 pulley.reportFloors(player);
                 player.displayClientMessage(Component.translatable("message.elevatormod.already_connected"), false);

@@ -57,12 +57,35 @@ public final class ElevatorAssembly {
         if (attachments != 1) return Result.fail("extra_attachment");
         if (blocks == 0) return Result.fail("missing_block");
         if (controllers != 1) return Result.fail("missing_controller");
+        if (!addMountedTouchscreens(level, visited)) return Result.fail("too_large");
         return new Result(attachment.immutable(), visited.size(), null, null, visited);
     }
-    private static boolean isCabinComponent(BlockState state) {
+
+    /**
+     * Touchscreens join a cabin only when mounted against one of its blocks, and always as a
+     * complete display. They are leaves: nothing is reached through them, so a landing screen
+     * beside a parked cabin is never absorbed.
+     */
+    private static boolean addMountedTouchscreens(Level level, Set<BlockPos> cabin) {
+        Set<BlockPos> screens = new HashSet<>();
+        for (BlockPos pos : cabin) {
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                BlockPos next = pos.relative(direction);
+                if (cabin.contains(next) || screens.contains(next) || !level.hasChunkAt(next)) continue;
+                BlockState state = level.getBlockState(next);
+                // A screen facing away from this cabin block has its rear mounted on it.
+                if (state.getBlock() instanceof ElevatorTouchscreenBlock screen && state.getValue(ElevatorTouchscreenBlock.FACING) == direction)
+                    screens.addAll(screen.intactCells(level, next, state));
+            }
+        }
+        cabin.addAll(screens);
+        return cabin.size() <= MAX_COMPONENTS;
+    }
+    static boolean isCabinComponent(BlockState state) {
         return state.is(ElevatorRegistries.ATTACHMENT) || state.is(ElevatorRegistries.ELEVATOR_BLOCK)
                 || state.is(ElevatorRegistries.CONTROLLER) || state.is(ElevatorRegistries.FLOOR_CONNECTOR)
-                || state.is(ElevatorRegistries.DOOR);
+                || state.is(ElevatorRegistries.DOOR) || state.is(ElevatorRegistries.LIGHT);
     }
     private ElevatorAssembly() {}
 }
+

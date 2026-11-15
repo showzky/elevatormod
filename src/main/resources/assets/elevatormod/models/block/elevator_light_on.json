@@ -1,73 +1,73 @@
 {
   "textures": {
-    "texture": "elevatormod:block/elevator_door",
-    "particle": "elevatormod:block/elevator_door"
+    "texture": "elevatormod:block/elevator_light_on",
+    "particle": "elevatormod:block/elevator_light_on"
   },
   "elements": [
     {
       "from": [
-        8,
         0,
-        7
+        13,
+        0
       ],
       "to": [
         16,
         16,
-        9
+        16
       ],
       "shade": true,
       "faces": {
-        "north": {
-          "uv": [
-            12.0,
-            8.0,
-            16.0,
-            16.0
-          ],
-          "texture": "#texture"
-        },
-        "east": {
-          "uv": [
-            12.0,
-            8.0,
-            16.0,
-            16.0
-          ],
-          "texture": "#texture"
-        },
-        "south": {
-          "uv": [
-            12.0,
-            8.0,
-            16.0,
-            16.0
-          ],
-          "texture": "#texture"
-        },
-        "west": {
-          "uv": [
-            12.0,
-            8.0,
-            16.0,
-            16.0
-          ],
-          "texture": "#texture"
-        },
         "up": {
           "uv": [
-            12.0,
+            0.0,
+            0.0,
             8.0,
-            16.0,
-            16.0
+            8.0
           ],
           "texture": "#texture"
         },
         "down": {
           "uv": [
-            12.0,
             8.0,
+            0.0,
             16.0,
-            16.0
+            8.0
+          ],
+          "texture": "#texture"
+        },
+        "north": {
+          "uv": [
+            0.0,
+            8.0,
+            8.0,
+            9.5
+          ],
+          "texture": "#texture"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            8.0,
+            8.0,
+            9.5
+          ],
+          "texture": "#texture"
+        },
+        "east": {
+          "uv": [
+            0.0,
+            8.0,
+            8.0,
+            9.5
+          ],
+          "texture": "#texture"
+        },
+        "west": {
+          "uv": [
+            0.0,
+            8.0,
+            8.0,
+            9.5
           ],
           "texture": "#texture"
         }

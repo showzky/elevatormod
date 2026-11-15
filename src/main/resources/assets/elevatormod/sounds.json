@@ -1,0 +1,14 @@
+{
+  "elevator_arrival": {
+    "subtitle": "subtitles.elevatormod.elevator_arrival",
+    "sounds": [
+      "elevatormod:elevator_arrival"
+    ]
+  },
+  "elevator_moving": {
+    "subtitle": "subtitles.elevatormod.elevator_moving",
+    "sounds": [
+      "elevatormod:elevator_moving"
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "textures": {
+    "door": "elevatormod:block/elevator_door",
+    "particle": "elevatormod:block/elevator_door"
+  },
+  "elements": [
+    {
+      "name": "left_panel_mesh",
+      "from": [
+        0,
+        0,
+        7
+      ],
+      "to": [
+        16,
+        32,
+        9
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.0,
+            0.0,
+            4.0,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            0.0,
+            4.0,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "east": {
+          "uv": [
+            8.0,
+            0.0,
+            8.5,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "west": {
+          "uv": [
+            8.0,
+            0.0,
+            8.5,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "up": {
+          "uv": [
+            9.0,
+            0.0,
+            13.0,
+            0.5
+          ],
+          "texture": "#door"
+        },
+        "down": {
+          "uv": [
+            9.0,
+            0.0,
+            13.0,
+            0.5
+          ],
+          "texture": "#door"
+        }
+      }
+    }
+  ]
+}

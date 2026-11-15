@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.showzky.elevatormod.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ElevatorCollisionMixin",
+    "ElevatorFlightCheckMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

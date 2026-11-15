@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "MGM",
+    "CKC",
+    "MGM"
+  ],
+  "key": {
+    "M": {
+      "tag": "elevatormod:structural_metal_ingots"
+    },
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "K": {
+      "item": "minecraft:comparator"
+    }
+  },
+  "result": {
+    "id": "elevatormod:elevator_touchscreen_2x2",
+    "count": 1
+  }
+}

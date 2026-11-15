@@ -1,0 +1,216 @@
+{
+  "textures": {
+    "texture": "elevatormod:block/call_button",
+    "particle": "elevatormod:block/call_button",
+    "indicator": "minecraft:block/redstone_block"
+  },
+  "elements": [
+    {
+      "from": [
+        5,
+        4,
+        14
+      ],
+      "to": [
+        11,
+        12,
+        16
+      ],
+      "shade": true,
+      "faces": {
+        "north": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#texture"
+        },
+        "east": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#texture"
+        },
+        "south": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#texture"
+        },
+        "west": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#texture"
+        },
+        "up": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#texture"
+        },
+        "down": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#texture"
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        7,
+        13
+      ],
+      "to": [
+        9,
+        9,
+        14
+      ],
+      "shade": true,
+      "faces": {
+        "north": {
+          "uv": [
+            8.0,
+            8.0,
+            12.0,
+            16.0
+          ],
+          "texture": "#indicator"
+        },
+        "east": {
+          "uv": [
+            8.0,
+            8.0,
+            12.0,
+            16.0
+          ],
+          "texture": "#indicator"
+        },
+        "south": {
+          "uv": [
+            8.0,
+            8.0,
+            12.0,
+            16.0
+          ],
+          "texture": "#indicator"
+        },
+        "west": {
+          "uv": [
+            8.0,
+            8.0,
+            12.0,
+            16.0
+          ],
+          "texture": "#indicator"
+        },
+        "up": {
+          "uv": [
+            8.0,
+            8.0,
+            12.0,
+            16.0
+          ],
+          "texture": "#indicator"
+        },
+        "down": {
+          "uv": [
+            8.0,
+            8.0,
+            12.0,
+            16.0
+          ],
+          "texture": "#indicator"
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        10,
+        13.8
+      ],
+      "to": [
+        9,
+        11,
+        14
+      ],
+      "shade": true,
+      "faces": {
+        "north": {
+          "uv": [
+            4.0,
+            8.0,
+            8.0,
+            16.0
+          ],
+          "texture": "#texture"
+        },
+        "east": {
+          "uv": [
+            4.0,
+            8.0,
+            8.0,
+            16.0
+          ],
+          "texture": "#texture"
+        },
+        "south": {
+          "uv": [
+            4.0,
+            8.0,
+            8.0,
+            16.0
+          ],
+          "texture": "#texture"
+        },
+        "west": {
+          "uv": [
+            4.0,
+            8.0,
+            8.0,
+            16.0
+          ],
+          "texture": "#texture"
+        },
+        "up": {
+          "uv": [
+            4.0,
+            8.0,
+            8.0,
+            16.0
+          ],
+          "texture": "#texture"
+        },
+        "down": {
+          "uv": [
+            4.0,
+            8.0,
+            8.0,
+            16.0
+          ],
+          "texture": "#texture"
+        }
+      }
+    }
+  ]
+}

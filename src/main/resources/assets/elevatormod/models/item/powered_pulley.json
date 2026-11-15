@@ -1,5 +1,5 @@
 {
-  "parent": "elevatormod:block/powered_pulley",
+  "parent": "elevatormod:block/powered_pulley_item",
   "display": {
     "thirdperson_righthand": {
       "rotation": [

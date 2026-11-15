@@ -1,6 +1,201 @@
 {
-  "parent": "elevatormod:block/elevator_door",
+  "gui_light": "front",
+  "textures": {
+    "door": "elevatormod:block/elevator_door",
+    "particle": "elevatormod:block/elevator_door"
+  },
+  "elements": [
+    {
+      "name": "left_panel_mesh",
+      "from": [
+        0,
+        0,
+        7
+      ],
+      "to": [
+        16,
+        32,
+        9
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.0,
+            0.0,
+            4.0,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            0.0,
+            4.0,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "east": {
+          "uv": [
+            8.0,
+            0.0,
+            8.5,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "west": {
+          "uv": [
+            8.0,
+            0.0,
+            8.5,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "up": {
+          "uv": [
+            9.0,
+            0.0,
+            13.0,
+            0.5
+          ],
+          "texture": "#door"
+        },
+        "down": {
+          "uv": [
+            9.0,
+            0.0,
+            13.0,
+            0.5
+          ],
+          "texture": "#door"
+        }
+      }
+    },
+    {
+      "name": "right_panel_mesh",
+      "from": [
+        16,
+        0,
+        7
+      ],
+      "to": [
+        32,
+        32,
+        9
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "south": {
+          "uv": [
+            4.0,
+            0.0,
+            8.0,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "east": {
+          "uv": [
+            8.0,
+            0.0,
+            8.5,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "west": {
+          "uv": [
+            8.0,
+            0.0,
+            8.5,
+            8.0
+          ],
+          "texture": "#door"
+        },
+        "up": {
+          "uv": [
+            9.0,
+            0.0,
+            13.0,
+            0.5
+          ],
+          "texture": "#door"
+        },
+        "down": {
+          "uv": [
+            9.0,
+            0.0,
+            13.0,
+            0.5
+          ],
+          "texture": "#door"
+        }
+      }
+    }
+  ],
   "display": {
+    "gui": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        -3.6,
+        -3.6,
+        0
+      ],
+      "scale": [
+        0.45,
+        0.45,
+        0.45
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        -3.6,
+        -3.6,
+        0
+      ],
+      "scale": [
+        0.45,
+        0.45,
+        0.45
+      ]
+    },
+    "ground": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.2,
+        0.2,
+        0.2
+      ]
+    },
     "thirdperson_righthand": {
       "rotation": [
         75,
@@ -13,9 +208,9 @@
         0
       ],
       "scale": [
-        0.375,
-        0.375,
-        0.375
+        0.1875,
+        0.1875,
+        0.1875
       ]
     },
     "thirdperson_lefthand": {
@@ -30,9 +225,9 @@
         0
       ],
       "scale": [
-        0.375,
-        0.375,
-        0.375
+        0.1875,
+        0.1875,
+        0.1875
       ]
     },
     "firstperson_righthand": {
@@ -41,10 +236,15 @@
         45,
         0
       ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
       "scale": [
-        0.4,
-        0.4,
-        0.4
+        0.2,
+        0.2,
+        0.2
       ]
     },
     "firstperson_lefthand": {
@@ -53,41 +253,15 @@
         225,
         0
       ],
-      "scale": [
-        0.4,
-        0.4,
-        0.4
-      ]
-    },
-    "gui": {
-      "rotation": [
-        30,
-        45,
-        0
-      ],
-      "scale": [
-        0.625,
-        0.625,
-        0.625
-      ]
-    },
-    "ground": {
       "translation": [
         0,
-        3,
+        0,
         0
       ],
       "scale": [
-        0.25,
-        0.25,
-        0.25
-      ]
-    },
-    "fixed": {
-      "scale": [
-        0.5,
-        0.5,
-        0.5
+        0.2,
+        0.2,
+        0.2
       ]
     }
   }

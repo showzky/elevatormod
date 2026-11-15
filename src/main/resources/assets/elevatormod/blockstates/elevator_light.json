@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "lit=false": {
+      "model": "elevatormod:block/elevator_light_off"
+    },
+    "lit=true": {
+      "model": "elevatormod:block/elevator_light_on"
+    }
+  }
+}

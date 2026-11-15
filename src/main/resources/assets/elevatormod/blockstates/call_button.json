@@ -1,17 +1,32 @@
 {
   "variants": {
-    "facing=north": {
+    "facing=north,powered=true": {
+      "model": "elevatormod:block/call_button_active"
+    },
+    "facing=north,powered=false": {
       "model": "elevatormod:block/call_button"
     },
-    "facing=east": {
+    "facing=east,powered=true": {
+      "model": "elevatormod:block/call_button_active",
+      "y": 90
+    },
+    "facing=east,powered=false": {
       "model": "elevatormod:block/call_button",
       "y": 90
     },
-    "facing=south": {
+    "facing=south,powered=true": {
+      "model": "elevatormod:block/call_button_active",
+      "y": 180
+    },
+    "facing=south,powered=false": {
       "model": "elevatormod:block/call_button",
       "y": 180
     },
-    "facing=west": {
+    "facing=west,powered=true": {
+      "model": "elevatormod:block/call_button_active",
+      "y": 270
+    },
+    "facing=west,powered=false": {
       "model": "elevatormod:block/call_button",
       "y": 270
     }

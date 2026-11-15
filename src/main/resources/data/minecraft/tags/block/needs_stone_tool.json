@@ -6,6 +6,10 @@
     "elevatormod:elevator_controller",
     "elevatormod:floor_connector",
     "elevatormod:call_button",
-    "elevatormod:elevator_door"
+    "elevatormod:elevator_door",
+    "elevatormod:elevator_light",
+    "elevatormod:elevator_touchscreen_1x1",
+    "elevatormod:elevator_touchscreen_1x2",
+    "elevatormod:elevator_touchscreen_2x2"
   ]
 }

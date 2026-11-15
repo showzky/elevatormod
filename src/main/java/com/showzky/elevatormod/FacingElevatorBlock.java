@@ -31,5 +31,14 @@ public class FacingElevatorBlock extends HorizontalDirectionalBlock {
             default -> Block.box(minX, minY, minZ, maxX, maxY, maxZ);
         };
     }
+    @Override protected net.minecraft.world.InteractionResult useWithoutItem(BlockState state, net.minecraft.world.level.Level level, BlockPos pos, net.minecraft.world.entity.player.Player player, net.minecraft.world.phys.BlockHitResult hit) {
+        if (!state.is(ElevatorRegistries.CONTROLLER) && !state.is(ElevatorRegistries.FLOOR_CONNECTOR)) return net.minecraft.world.InteractionResult.PASS;
+        if (!level.isClientSide) {
+            if (state.is(ElevatorRegistries.CONTROLLER)) ElevatorControlMenu.open(player, pos, 2);
+            else ElevatorControlMenu.open(player, pos, 1);
+        }
+        return net.minecraft.world.InteractionResult.sidedSuccess(level.isClientSide);
+    }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(FACING); }
 }
+
