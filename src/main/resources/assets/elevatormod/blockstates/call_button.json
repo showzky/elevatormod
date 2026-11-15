@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "elevatormod:block/call_button"
+    },
+    "facing=east": {
+      "model": "elevatormod:block/call_button",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "elevatormod:block/call_button",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "elevatormod:block/call_button",
+      "y": 270
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "MRM",
+    "CGP",
+    "MRM"
+  ],
+  "key": {
+    "M": {
+      "tag": "elevatormod:structural_metal_ingots"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "C": {
+      "item": "minecraft:comparator"
+    },
+    "G": {
+      "item": "minecraft:glass_pane"
+    },
+    "P": {
+      "item": "minecraft:copper_ingot"
+    }
+  },
+  "result": {
+    "id": "elevatormod:elevator_controller",
+    "count": 1
+  }
+}

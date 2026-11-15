@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "MSM",
+    "S S",
+    "MSM"
+  ],
+  "key": {
+    "M": {
+      "tag": "elevatormod:structural_metal_ingots"
+    },
+    "S": {
+      "item": "minecraft:smooth_stone"
+    }
+  },
+  "result": {
+    "id": "elevatormod:elevator_block",
+    "count": 16
+  }
+}

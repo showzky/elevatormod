@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "elevatormod:block/powered_pulley"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "values": [
+    "elevatormod:powered_pulley",
+    "elevatormod:rope_attachment",
+    "elevatormod:elevator_block",
+    "elevatormod:elevator_controller",
+    "elevatormod:floor_connector",
+    "elevatormod:call_button",
+    "elevatormod:elevator_door"
+  ]
+}

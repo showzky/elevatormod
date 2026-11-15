@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "MCM",
+    "COR",
+    " M "
+  ],
+  "key": {
+    "M": {
+      "tag": "elevatormod:structural_metal_ingots"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "O": {
+      "item": "minecraft:observer"
+    }
+  },
+  "result": {
+    "id": "elevatormod:floor_connector",
+    "count": 2
+  }
+}

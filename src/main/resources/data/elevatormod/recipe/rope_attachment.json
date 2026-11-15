@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "MCM",
+    "MCM"
+  ],
+  "key": {
+    "M": {
+      "tag": "elevatormod:structural_metal_ingots"
+    },
+    "C": {
+      "item": "minecraft:chain"
+    }
+  },
+  "result": {
+    "id": "elevatormod:rope_attachment",
+    "count": 1
+  }
+}
