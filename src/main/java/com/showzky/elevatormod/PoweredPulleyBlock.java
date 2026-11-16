@@ -24,8 +24,11 @@ public class PoweredPulleyBlock extends BaseEntityBlock {
     @Override public @Nullable BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new PoweredPulleyBlockEntity(pos, state); }
     @Override public <T extends BlockEntity> @Nullable BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return createTickerHelper(type, ElevatorRegistries.PULLEY_ENTITY.get(), (world, pos, tickState, pulley) -> { if (world.isClientSide) {
-            pulley.motion.clientTick();
-            if (pulley.motion.active()) ElevatorContraptionCollision.resolve(pulley.motion, world, pulley.motion.displayPreviousY, pulley.motion.displayY);
+            // Client cabin motion advances at the start of the client tick (ElevatorClientCabinTicker),
+            // before the local player is carried and moves, so the cabin has not moved since. Passing
+            // this tick's cabin step again would count it twice: at high speed the phantom relative
+            // motion reaches the ceiling and pushes the rider down through the floor.
+            if (pulley.motion.active()) ElevatorContraptionCollision.resolve(pulley.motion, world, pulley.motion.displayY, pulley.motion.displayY);
         } else {
             double before = pulley.motion.y;
             PoweredPulleyBlockEntity.tick(world, pos, tickState, pulley);

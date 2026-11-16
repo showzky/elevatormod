@@ -32,9 +32,38 @@ public final class ElevatorCabinMotion {
     private long nextParkAttempt;
     private final java.util.ArrayDeque<Integer> callQueue = new java.util.ArrayDeque<>();
 
-    /** Advances client display coordinates once per client tick. */
+    /**
+     * Largest cabin movement within one client tick that is still treated as travel rather than
+     * a teleport or reload. Position updates can arrive bunched, several in one client tick, so
+     * this must cover several ticks at top speed (1 block per tick).
+     */
+    public static final double CLIENT_SNAP_DISTANCE = 8;
+
+    /** Below this the remaining client correction is applied at once, as Create does. */
+    private static final double CORRECTION_SNAP = 1.0 / 128;
+    /** Share of the remaining server correction applied per client tick. */
+    private static final double CORRECTION_RATE = 0.25;
+    /** Server-minus-client position difference still to be blended in on the client. */
+    private double clientCorrection;
+    /** True while the server holds the cabin mid-trip (no power, obstructed, unloaded area). */
+    private boolean stalled;
+
+    /**
+     * Client-side motion, adapted from Create's linear actuators and elevator pulley: the client
+     * simulates the cabin with the same speed curve as the server, one step per tick, and blends
+     * server positions in gradually. Updates that arrive bunched therefore never make the cabin
+     * jump several blocks under its riders. Runs at the start of each client tick, before
+     * entities, so riders are carried by this tick's movement.
+     */
     public void clientTick() {
-        if (!displayInitialized || Math.abs(y - displayY) > 4) {
+        if (active() && !stalled && Math.abs(target - y) > 1e-6) y += nextStep(target - y);
+        else if (stalled) velocity = 0;
+        if (clientCorrection != 0) {
+            double applied = Math.abs(clientCorrection) < CORRECTION_SNAP ? clientCorrection : clientCorrection * CORRECTION_RATE;
+            y += applied;
+            clientCorrection -= applied;
+        }
+        if (!displayInitialized || Math.abs(y - displayY) > CLIENT_SNAP_DISTANCE) {
             displayPreviousY = displayY = y;
             displayInitialized = true;
         } else {
@@ -48,6 +77,18 @@ public final class ElevatorCabinMotion {
     public static void register(PoweredPulleyBlockEntity pulley) { LOADED.computeIfAbsent(pulley.getLevel(), l -> Collections.newSetFromMap(new WeakHashMap<>())).add(pulley); }
     public static List<PoweredPulleyBlockEntity> loaded(Level level) { return LOADED.getOrDefault(level, Set.of()).stream().filter(p -> !p.isRemoved() && level.hasChunkAt(p.getBlockPos())).toList(); }
     public boolean active() { return !parts.isEmpty(); }
+
+    /**
+     * Updates the velocity and returns this tick's movement towards a destination, using Create's
+     * elevator profile: accelerate towards the set speed, then brake at the same rate so the
+     * cabin stops exactly at the landing. Shared by server movement and client simulation.
+     */
+    private double nextStep(double remaining) {
+        double acceleration = ElevatorEnergyUsage.acceleration(speed);
+        double desired = Math.copySign(Math.min(speed, Math.sqrt(2 * acceleration * Math.abs(remaining))), remaining);
+        velocity += Math.clamp(desired - velocity, -acceleration, acceleration);
+        return Math.copySign(Math.min(Math.abs(velocity), Math.abs(remaining)), remaining);
+    }
     public List<VoxelShape> shapes(double atY) {
         List<VoxelShape> shapes = new ArrayList<>();
         for (Part part : parts) shapes.add(part.state.getCollisionShape(owner.getLevel(), origin.offset(part.offset)).move(origin.getX()+part.offset.getX(),atY+part.offset.getY(),origin.getZ()+part.offset.getZ()));
@@ -128,10 +169,9 @@ public final class ElevatorCabinMotion {
             } else if (!AUTO_PARK_ENABLED && !status.equals("Ready")) { status="Ready"; owner.sync(); }
             return;
         }
+        stalled=true;
         if(owner.energy().getEnergyStored()<ElevatorEnergyUsage.perTick(speed)) { velocity=0; status="Waiting for FE"; owner.sync(); return; }
-        double desired=Math.copySign(Math.min(speed,Math.sqrt(2*0.005*Math.abs(remaining))),remaining);
-        velocity += Math.clamp(desired-velocity,-0.005,0.005);
-        double step=Math.copySign(Math.min(Math.abs(velocity),Math.abs(remaining)),remaining);
+        double step=nextStep(remaining);
         List<VoxelShape> old=shapes(y), next=shapes(y+step);
         for(int i=0;i<next.size();i++) {
             if(next.get(i).isEmpty()) continue;
@@ -141,6 +181,7 @@ public final class ElevatorCabinMotion {
             }
             if(!level.noBlockCollision(null, swept)) { velocity=0;status="Obstructed near " + swept;owner.sync();return; }
         }
+        stalled=false;
         Set<Entity> riders=new HashSet<>();
         for(VoxelShape shape:old) if(!shape.isEmpty()) {
             AABB box=shape.bounds();
@@ -185,13 +226,33 @@ public final class ElevatorCabinMotion {
     }
     public void save(CompoundTag tag) {
         tag.putIntArray("CallQueue",callQueue.stream().mapToInt(Integer::intValue).toArray());
-        tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);
+        tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinVelocity",velocity);tag.putBoolean("CabinStalled",stalled);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);
         ListTag list=new ListTag();for(Part p:parts){CompoundTag t=new CompoundTag();t.putLong("Offset",p.offset.asLong());t.put("State",NbtUtils.writeBlockState(p.state));t.put("Data",p.data.copy());list.add(t);}tag.put("CabinParts",list);
+    }
+    /**
+     * The server and saved data take the position as given. A client already simulating this
+     * trip keeps its own position and blends the server's in (see clientTick); a newly
+     * assembled cabin or a teleport-sized difference snaps instead.
+     */
+    private void readPosition(CompoundTag tag) {
+        double serverY = tag.getDouble("CabinY");
+        stalled = tag.getBoolean("CabinStalled");
+        Level level = owner.getLevel();
+        boolean simulating = level != null && level.isClientSide && active() && tag.contains("CabinParts")
+                && !tag.getList("CabinParts", 10).isEmpty() && Math.abs(serverY - y) <= CLIENT_SNAP_DISTANCE;
+        if (simulating) {
+            clientCorrection = serverY - y;
+            if (stalled) velocity = 0;
+        } else {
+            y = serverY;
+            velocity = tag.getDouble("CabinVelocity");
+            clientCorrection = 0;
+        }
     }
     public void load(CompoundTag tag) {
         callQueue.clear();for(int stop:tag.getIntArray("CallQueue")) callQueue.addLast(stop);
         nextParkAttempt=0;
-        origin=BlockPos.of(tag.getLong("CabinOrigin"));previousY=y;y=tag.getDouble("CabinY");target=tag.getDouble("CabinTarget");speed=tag.contains("CabinSpeed")?ElevatorEnergyUsage.sanitizeSpeed(tag.getDouble("CabinSpeed")):ElevatorEnergyUsage.DEFAULT_SPEED;status=tag.getString("CabinStatus");if(!tag.contains("CabinParts"))return;parts.clear();
+        origin=BlockPos.of(tag.getLong("CabinOrigin"));previousY=y;readPosition(tag);target=tag.getDouble("CabinTarget");speed=tag.contains("CabinSpeed")?ElevatorEnergyUsage.sanitizeSpeed(tag.getDouble("CabinSpeed")):ElevatorEnergyUsage.DEFAULT_SPEED;status=tag.getString("CabinStatus");if(!tag.contains("CabinParts"))return;parts.clear();
         for(Tag entry:tag.getList("CabinParts",10)){CompoundTag t=(CompoundTag)entry;parts.add(new Part(BlockPos.of(t.getLong("Offset")),NbtUtils.readBlockState(net.minecraft.core.registries.BuiltInRegistries.BLOCK.asLookup(),t.getCompound("State")),t.getCompound("Data")));}
     }
 }

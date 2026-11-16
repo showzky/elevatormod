@@ -128,7 +128,7 @@ public final class ElevatorControlScreen extends AbstractContainerScreen<Elevato
   String fitted=font.plainSubstrByWidth(s,96);
   g.drawString(font,fitted,leftPos+right-font.width(fitted),topPos+y,color,false);
  }
- /** Drags continuously, snaps to 0.1 m/s steps and only sends a new speed when the step changes. */
+ /** Drags continuously, snaps to 0.5 m/s steps and only sends a new speed when the step changes. */
  private final class SpeedSlider extends AbstractSliderButton {
   private static final double MIN=ElevatorEnergyUsage.MIN_SPEED, MAX=ElevatorEnergyUsage.MAX_SPEED;
   private double sentSpeed=Double.NaN;

@@ -37,20 +37,24 @@ public final class ElevatorClientPassengerCarry {
             Double previous = LAST_HEIGHT.put(pulley, motion.y);
             if (previous == null) continue;
             double delta = motion.y - previous;
-            // Ignore no movement and large jumps (reloads, teleports of the cabin data).
-            if (Math.abs(delta) < 1e-7 || Math.abs(delta) > 2) continue;
+            // Ignore no movement and teleport-sized jumps (reloads of the cabin data). Bunched
+            // updates at high speed move the cabin several blocks in one tick and must still carry.
+            if (Math.abs(delta) < 1e-7 || Math.abs(delta) > ElevatorCabinMotion.CLIENT_SNAP_DISTANCE) continue;
             if (player.isPassenger() || player.isSpectator() || player.getAbilities().flying) continue;
-            if (standingOn(motion, previous, player.getBoundingBox()) && player.getDeltaMovement().y <= 0.1)
+            // A descending cabin can drop away from a rider faster than gravity pulls them down,
+            // so on the way down a rider slightly above the floor is still carried with it.
+            double reach = STANDING_TOLERANCE + Math.max(0, -delta);
+            if (standingOn(motion, previous, player.getBoundingBox(), reach) && player.getDeltaMovement().y <= 0.1)
                 ElevatorPassengerCollision.carry(player, delta);
         }
     }
 
-    private static boolean standingOn(ElevatorCabinMotion motion, double cabinY, AABB feet) {
+    private static boolean standingOn(ElevatorCabinMotion motion, double cabinY, AABB feet, double reach) {
         for (VoxelShape shape : motion.shapes(cabinY)) {
             if (shape.isEmpty()) continue;
             AABB box = shape.bounds();
             if (feet.maxX > box.minX && feet.minX < box.maxX && feet.maxZ > box.minZ && feet.minZ < box.maxZ
-                    && Math.abs(feet.minY - box.maxY) < STANDING_TOLERANCE) return true;
+                    && feet.minY > box.maxY - STANDING_TOLERANCE && feet.minY < box.maxY + reach) return true;
         }
         return false;
     }
