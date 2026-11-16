@@ -18,6 +18,9 @@ public abstract class ElevatorFlightCheckMixin {
     @Inject(method = "noBlocksAround", at = @At("HEAD"), cancellable = true)
     private void elevatormod$cabinCountsAsGround(Entity entity, CallbackInfoReturnable<Boolean> result) {
         var area = entity.getBoundingBox().inflate(0.0625).expandTowards(0.0, -0.55, 0.0);
-        if (!ElevatorCabinMotion.collisions(entity.level(), area).isEmpty()) result.setReturnValue(false);
+        if (!ElevatorCabinMotion.collisions(entity.level(), area).isEmpty()
+                // While descending fast the server's cabin leads the player's reported position.
+                || entity instanceof net.minecraft.world.entity.player.Player player && ElevatorCabinMotion.carriesPlayer(player))
+            result.setReturnValue(false);
     }
 }

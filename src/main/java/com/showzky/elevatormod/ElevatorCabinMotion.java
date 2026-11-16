@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.*;
 import net.minecraft.world.phys.shapes.*;
+import org.jetbrains.annotations.Nullable;
 
 /** Pulley-owned cabin data and vertical motion; world blocks are transferred only once. */
 public final class ElevatorCabinMotion {
@@ -70,6 +71,34 @@ public final class ElevatorCabinMotion {
             displayPreviousY = displayY;
             displayY = y;
         }
+        turnDrum();
+    }
+
+    /** Drum rotation per block of rope wound or unwound (the drum's radius is about 5/16 block). */
+    private static final double DRUM_DEGREES_PER_BLOCK = 180;
+    /**
+     * Drawn drum rotation is capped per tick. At top speed the drum would turn half a revolution
+     * each tick, so a symmetric drum would look frozen or spin backwards (the wagon-wheel effect).
+     */
+    private static final double MAX_DRUM_DEGREES_PER_TICK = 90;
+    /** Client drum angle in degrees, for interpolation between ticks. */
+    public double drumPreviousAngle, drumAngle;
+    private double drumTrackedY = Double.NaN;
+
+    /**
+     * Accumulates the drum angle from cabin movement rather than deriving it from the cabin's
+     * height, so the drum keeps its angle when the cabin parks instead of snapping back.
+     */
+    private void turnDrum() {
+        drumPreviousAngle = drumAngle;
+        double moved = y - drumTrackedY;
+        if (Math.abs(moved) <= CLIENT_SNAP_DISTANCE)
+            drumAngle += Math.clamp(moved * DRUM_DEGREES_PER_BLOCK, -MAX_DRUM_DEGREES_PER_TICK, MAX_DRUM_DEGREES_PER_TICK);
+        drumTrackedY = y;
+        // Keep the values small; both shift together so interpolation is unaffected.
+        double wrap = 360 * Math.floor(drumAngle / 360);
+        drumAngle -= wrap;
+        drumPreviousAngle -= wrap;
     }
     public double speed = ElevatorEnergyUsage.DEFAULT_SPEED;
     public String status = "Ready";
@@ -94,6 +123,48 @@ public final class ElevatorCabinMotion {
         for (Part part : parts) shapes.add(part.state.getCollisionShape(owner.getLevel(), origin.offset(part.offset)).move(origin.getX()+part.offset.getX(),atY+part.offset.getY(),origin.getZ()+part.offset.getZ()));
         return shapes;
     }
+    /** Ticks after parking during which riders are still treated as on the cabin (hand-off to real blocks). */
+    private static final int PARKED_GRACE_TICKS = 40;
+    /** Vertical slack around the cabin, so players standing on its roof or floor count as riders. */
+    private static final double RIDER_MARGIN = 2;
+    private @Nullable AABB parkedBounds;
+    private long parkedUntil;
+
+    /** The block-aligned box enclosing every part with the cabin at the given height, or null when parked. */
+    public @Nullable AABB cabinBounds(double atY) {
+        if (parts.isEmpty()) return null;
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        for (Part part : parts) {
+            BlockPos o = part.offset;
+            minX = Math.min(minX, o.getX()); minY = Math.min(minY, o.getY()); minZ = Math.min(minZ, o.getZ());
+            maxX = Math.max(maxX, o.getX()); maxY = Math.max(maxY, o.getY()); maxZ = Math.max(maxZ, o.getZ());
+        }
+        return new AABB(origin.getX() + minX, atY + minY, origin.getZ() + minZ, origin.getX() + maxX + 1, atY + maxY + 1, origin.getZ() + maxZ + 1);
+    }
+
+    /**
+     * Where a player counts as riding this cabin. Players report their own position, which lags
+     * the server's cabin by their latency, so the area extends vertically by up to a second of
+     * travel. It stays in place briefly after parking.
+     */
+    public @Nullable AABB riderArea(long gameTime) {
+        AABB bounds = cabinBounds(y);
+        if (bounds != null) return bounds.inflate(0, RIDER_MARGIN + Math.abs(velocity) * 20, 0);
+        return gameTime < parkedUntil && parkedBounds != null ? parkedBounds.inflate(0, RIDER_MARGIN, 0) : null;
+    }
+
+    /** True for a player riding, or just arrived on, any cabin in their level. */
+    public static boolean carriesPlayer(net.minecraft.world.entity.player.Player player) {
+        Level level = player.level();
+        AABB feet = player.getBoundingBox();
+        for (var pulley : loaded(level)) {
+            AABB area = pulley.motion.riderArea(level.getGameTime());
+            if (area != null && area.intersects(feet)) return true;
+        }
+        return false;
+    }
+
     public static List<VoxelShape> collisions(Level level, AABB box) {
         List<VoxelShape> result = new ArrayList<>();
         for (var p : loaded(level)) if (p.motion.active()) for (var shape : p.motion.shapes(p.motion.y))
@@ -222,6 +293,7 @@ public final class ElevatorCabinMotion {
             var be=level.getBlockEntity(pos);
             if(be!=null&&!p.data.isEmpty()){ CompoundTag data=p.data.copy();data.putInt("x",pos.getX());data.putInt("y",pos.getY());data.putInt("z",pos.getZ());be.loadWithComponents(data,level.registryAccess());be.setChanged(); }
         }
+        parkedBounds=cabinBounds(at.getY()); parkedUntil=level.getGameTime()+PARKED_GRACE_TICKS;
         parts.clear(); nextParkAttempt=0; status="Ready"; owner.arrived(at);return true;
     }
     public void save(CompoundTag tag) {

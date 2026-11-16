@@ -15,8 +15,8 @@ public class ElevatorRopeRenderer implements BlockEntityRenderer<PoweredPulleyBl
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(ElevatorMod.MOD_ID, "textures/block/elevator_rope.png");
     public ElevatorRopeRenderer(BlockEntityRendererProvider.Context context) {}
     @Override public void render(PoweredPulleyBlockEntity pulley, float partialTick, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        double drumY=pulley.motion.active()?net.minecraft.util.Mth.lerp(partialTick,pulley.motion.displayPreviousY,pulley.motion.displayY):0;
-        pose.pushPose();pose.translate(0.5,0.3125,0.5);pose.mulPose(Axis.XP.rotationDegrees((float)(drumY*180)));pose.translate(-0.5,-0.3125,-0.5);
+        double drumAngle=net.minecraft.util.Mth.lerp(partialTick,pulley.motion.drumPreviousAngle,pulley.motion.drumAngle);
+        pose.pushPose();pose.translate(0.5,0.3125,0.5);pose.mulPose(Axis.XP.rotationDegrees((float)drumAngle));pose.translate(-0.5,-0.3125,-0.5);
         var mc=net.minecraft.client.Minecraft.getInstance();
         mc.getBlockRenderer().getModelRenderer().renderModel(pose.last(),buffers.getBuffer(RenderType.solid()),pulley.getBlockState(),mc.getModelManager().getModel(DRUM),1,1,1,light,overlay);
         pose.popPose();
@@ -71,6 +71,24 @@ public class ElevatorRopeRenderer implements BlockEntityRenderer<PoweredPulleyBl
     }
     private static void vertex(VertexConsumer out, PoseStack.Pose pose, float x, float y, float z, float u, float v, int light, int overlay) {
         out.addVertex(pose, x, y, z).setColor(255, 255, 255, 255).setUv(u, v).setOverlay(overlay).setLight(light).setNormal(pose, 0, 0, -1);
+    }
+    /**
+     * NeoForge skips this renderer when its bounding box is out of view. It draws the rope and the
+     * whole moving cabin, so the box must cover them, not just the pulley block: otherwise the
+     * cabin blinks out whenever the pulley leaves the screen.
+     */
+    @Override public net.minecraft.world.phys.AABB getRenderBoundingBox(PoweredPulleyBlockEntity pulley) {
+        var bounds = new net.minecraft.world.phys.AABB(pulley.getBlockPos());
+        var motion = pulley.motion;
+        if (motion.active()) {
+            var from = motion.cabinBounds(motion.displayPreviousY);
+            var to = motion.cabinBounds(motion.displayY);
+            if (from != null) bounds = bounds.minmax(from);
+            if (to != null) bounds = bounds.minmax(to);
+        } else if (pulley.attachment() != null) {
+            bounds = bounds.minmax(new net.minecraft.world.phys.AABB(pulley.attachment()));
+        }
+        return bounds;
     }
     @Override public boolean shouldRenderOffScreen(PoweredPulleyBlockEntity pulley) { return true; }
     @Override public int getViewDistance() { return 256; }

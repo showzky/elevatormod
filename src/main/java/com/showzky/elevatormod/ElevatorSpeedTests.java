@@ -81,8 +81,14 @@ public final class ElevatorSpeedTests {
             client.clientTick();
             test.assertTrue(Math.abs(client.y - before) <= ElevatorEnergyUsage.MAX_SPEED + 1e-9,
                     "Client cabin must move at most one speed-step per tick, moved " + Math.abs(client.y - before));
+            test.assertTrue(Math.abs(client.drumAngle - client.drumPreviousAngle) <= 90 + 1e-9,
+                    "Drawn drum rotation must be capped per tick, turned " + Math.abs(client.drumAngle - client.drumPreviousAngle));
         }
         test.assertTrue(client.y == client.target, "Client simulation must stop exactly at the landing, y=" + client.y);
+        double parkedAngle = client.drumAngle;
+        client.parts.clear();
+        client.clientTick();
+        test.assertTrue(client.drumAngle == parkedAngle && client.drumPreviousAngle == parkedAngle, "The drum must keep its angle when the cabin parks");
         test.succeed();
     }
 
