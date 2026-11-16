@@ -24,7 +24,8 @@ public final class ElevatorRegistries {
 
     public static final DeferredBlock<Block> PULLEY = BLOCKS.register("powered_pulley", () -> new PoweredPulleyBlock(properties().noOcclusion()));
     public static final DeferredBlock<Block> ATTACHMENT = block("rope_attachment", true);
-    public static final DeferredBlock<Block> ELEVATOR_BLOCK = BLOCKS.register("elevator_block", () -> new ElevatorBlock(properties()));
+    public static final DeferredBlock<Block> ELEVATOR_BLOCK = BLOCKS.register("elevator_block", () -> new ElevatorBlock(properties()
+            .isViewBlocking(ElevatorBlock::isOpaque).isSuffocating(ElevatorBlock::isOpaque)));
     public static final DeferredBlock<Block> CONTROLLER = facingBlock("elevator_controller");
     public static final DeferredBlock<Block> FLOOR_CONNECTOR = BLOCKS.register("floor_connector", () -> new FloorConnectorBlock(properties().noOcclusion()));
     public static final DeferredBlock<Block> CALL_BUTTON = BLOCKS.register("call_button", () -> new ElevatorCallButtonBlock(properties().noOcclusion().lightLevel(state -> state.getValue(ElevatorCallButtonBlock.POWERED) ? 5 : 0)));

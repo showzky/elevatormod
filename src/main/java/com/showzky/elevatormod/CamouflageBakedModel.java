@@ -26,6 +26,10 @@ public final class CamouflageBakedModel extends BakedModelWrapper<BakedModel> {
         BlockState disguise=data.get(ElevatorBlockEntity.CAMOUFLAGE);
         return disguise==null ? originalModel.getRenderTypes(state,random,data) : model(disguise).getRenderTypes(disguise,random,ModelData.EMPTY);
     }
+    @Override public net.neoforged.neoforge.common.util.TriState useAmbientOcclusion(BlockState state, ModelData data, RenderType renderType) {
+        BlockState disguise=data.get(ElevatorBlockEntity.CAMOUFLAGE);
+        return disguise==null ? originalModel.useAmbientOcclusion(state,data,renderType) : model(disguise).useAmbientOcclusion(disguise,ModelData.EMPTY,renderType);
+    }
     @Override public TextureAtlasSprite getParticleIcon(ModelData data) {
         BlockState disguise=data.get(ElevatorBlockEntity.CAMOUFLAGE);
         return disguise==null ? originalModel.getParticleIcon(data) : model(disguise).getParticleIcon(ModelData.EMPTY);

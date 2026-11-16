@@ -15,6 +15,10 @@ import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
@@ -22,8 +26,32 @@ import org.jetbrains.annotations.Nullable;
 
 public final class ElevatorBlock extends Block implements EntityBlock {
     public static final MapCodec<ElevatorBlock> CODEC = simpleCodec(ElevatorBlock::new);
-    public ElevatorBlock(Properties properties) { super(properties); }
+    public static final EnumProperty<CamouflageOpacity> OPACITY = EnumProperty.create("camouflage", CamouflageOpacity.class);
+    public ElevatorBlock(Properties properties) { super(properties); registerDefaultState(stateDefinition.any().setValue(OPACITY, CamouflageOpacity.SOLID)); }
     @Override protected MapCodec<? extends Block> codec() { return CODEC; }
+    @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(OPACITY); }
+
+    /** Used for view blocking and suffocation: see-through camouflage behaves like glass. */
+    public static boolean isOpaque(BlockState state, BlockGetter level, BlockPos pos) {
+        return state.getValue(OPACITY) == CamouflageOpacity.SOLID;
+    }
+    // See-through camouflage must not hide neighbouring faces, or the world shows through it.
+    @Override protected VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return state.getValue(OPACITY) == CamouflageOpacity.SOLID ? super.getOcclusionShape(state, level, pos) : Shapes.empty();
+    }
+    @Override protected int getLightBlock(BlockState state, BlockGetter level, BlockPos pos) {
+        return switch (state.getValue(OPACITY)) {
+            case SOLID -> super.getLightBlock(state, level, pos);
+            case CLEAR -> 0;
+            case TINTED -> level.getMaxLightLevel();
+        };
+    }
+    @Override protected boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
+        return state.getValue(OPACITY) == CamouflageOpacity.CLEAR;
+    }
+    @Override protected float getShadeBrightness(BlockState state, BlockGetter level, BlockPos pos) {
+        return state.getValue(OPACITY) == CamouflageOpacity.SOLID ? super.getShadeBrightness(state, level, pos) : 1.0F;
+    }
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new ElevatorBlockEntity(pos,state); }
     @Override protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!player.isShiftKeyDown() || !(stack.getItem() instanceof BlockItem item)) return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;

@@ -20,6 +20,12 @@ public final class ElevatorBlockEntity extends BlockEntity {
     public @Nullable BlockState camouflage() { return camouflage; }
     public void setCamouflage(@Nullable BlockState state) {
         camouflage = state; setChanged();
+        // The block state carries the camouflage's opacity, so vanilla updates light and the
+        // chunk mesh, and the off-thread light engine sees it without reading this block entity.
+        if (level != null && !level.isClientSide && getBlockState().hasProperty(ElevatorBlock.OPACITY)) {
+            BlockState next = getBlockState().setValue(ElevatorBlock.OPACITY, CamouflageOpacity.of(state));
+            if (next != getBlockState()) level.setBlock(worldPosition, next, 3);
+        }
         if (level != null) { if (level.isClientSide) requestModelDataUpdate(); level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3); }
     }
     public static @Nullable BlockState readCamouflage(CompoundTag tag) {

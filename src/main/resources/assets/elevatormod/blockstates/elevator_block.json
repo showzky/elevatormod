@@ -1,6 +1,12 @@
 {
   "variants": {
-    "": {
+    "camouflage=solid": {
+      "model": "elevatormod:block/elevator_block"
+    },
+    "camouflage=clear": {
+      "model": "elevatormod:block/elevator_block"
+    },
+    "camouflage=tinted": {
       "model": "elevatormod:block/elevator_block"
     }
   }

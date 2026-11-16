@@ -124,7 +124,7 @@ public final class ElevatorMovementTests {
   var dirt=new net.minecraft.world.item.ItemStack(net.minecraft.world.level.block.Blocks.DIRT,2);player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,dirt);
   block.useItemOn(dirt,level.getBlockState(pos),level,pos,player,net.minecraft.world.InteractionHand.MAIN_HAND,hit);
   test.assertTrue(dirt.getCount()==1 && be.camouflage().is(net.minecraft.world.level.block.Blocks.DIRT) && player.getInventory().contains(new net.minecraft.world.item.ItemStack(net.minecraft.world.level.block.Blocks.STONE)),"Swap must consume one and return old material");
-  for(var invalid:java.util.List.of(net.minecraft.world.level.block.Blocks.CHEST,net.minecraft.world.level.block.Blocks.GLASS,net.minecraft.world.level.block.Blocks.STONE_SLAB,ElevatorRegistries.ELEVATOR_BLOCK.get())) {
+  for(var invalid:java.util.List.of(net.minecraft.world.level.block.Blocks.CHEST,net.minecraft.world.level.block.Blocks.OAK_LEAVES,net.minecraft.world.level.block.Blocks.STONE_SLAB,ElevatorRegistries.ELEVATOR_BLOCK.get())) {
    var stack=new net.minecraft.world.item.ItemStack(invalid,2);player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,stack);
    block.useItemOn(stack,level.getBlockState(pos),level,pos,player,net.minecraft.world.InteractionHand.MAIN_HAND,hit);
    test.assertTrue(stack.getCount()==2 && be.camouflage().is(net.minecraft.world.level.block.Blocks.DIRT),"Invalid camouflage must not consume or change state: "+invalid);
