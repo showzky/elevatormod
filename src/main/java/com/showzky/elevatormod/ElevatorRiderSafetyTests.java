@@ -57,6 +57,24 @@ public final class ElevatorRiderSafetyTests {
         test.succeed();
     }
 
+    @GameTest(template = "empty", batch = "rider_park_feet")
+    public static void lateRiderPositionDoesNotBlockParking(GameTestHelper test) {
+        var level = test.getLevel();
+        BlockPos origin = test.absolutePos(new BlockPos(3, 2, 3));
+        var pulley = ElevatorTouchscreenTests.elevator(test, origin);
+        test.assertTrue(pulley.motion.assemble(), "Cabin must assemble: " + pulley.motion.status);
+        // An armour stand inside the top of the roof part still blocks parking.
+        var stand = new net.minecraft.world.entity.decoration.ArmorStand(level, origin.getX() + 0.5, origin.getY() + 0.8, origin.getZ() + 0.5);
+        level.addFreshEntity(stand);
+        test.assertFalse(pulley.motion.disassemble(), "A non-player inside a part must block parking");
+        test.assertTrue(pulley.motion.status.contains("blocked by entity"), "Blocked parking must say why: " + pulley.motion.status);
+        stand.discard();
+        // A rider reported slightly inside the floor (a moment behind the cabin) must not.
+        rider(test, origin.getX() + 0.5, origin.getY() + 0.8, origin.getZ() + 0.5);
+        test.assertTrue(pulley.motion.disassemble(), "A rider's late position must not block parking: " + pulley.motion.status);
+        test.succeed();
+    }
+
     @GameTest(template = "empty", batch = "rider_bounds")
     public static void boundsCoverEveryPart(GameTestHelper test) {
         BlockPos origin = test.absolutePos(new BlockPos(3, 2, 3));

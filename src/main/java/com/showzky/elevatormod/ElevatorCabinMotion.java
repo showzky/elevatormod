@@ -181,7 +181,7 @@ public final class ElevatorCabinMotion {
             if (state.is(ElevatorRegistries.DOOR) && state.getValue(ElevatorDoorBlock.FRAME) != 0) { status="Close the cabin doors first"; return false; }
         }
         register(owner);
-        owner.connect(scan); origin = scan.attachment(); y=previousY=target=origin.getY();
+        owner.connect(scan); origin = scan.attachment(); y=previousY=target=origin.getY(); arrivedAt = Long.MIN_VALUE / 2;
         for (BlockPos pos : scan.components()) {
             var be = level.getBlockEntity(pos);
             parts.add(new Part(pos.subtract(origin), level.getBlockState(pos), be == null ? new CompoundTag() : be.saveWithFullMetadata(level.registryAccess())));
@@ -236,7 +236,13 @@ public final class ElevatorCabinMotion {
         if(Math.abs(remaining)<1e-6) {
             y=target; velocity=0;
             if (AUTO_PARK_ENABLED && level.getGameTime() >= nextParkAttempt) {
-                if (!disassemble()) { nextParkAttempt=level.getGameTime()+20; owner.sync(); }
+                if (!disassemble()) {
+                    // Right after arriving, a refusal is usually a rider whose reported position
+                    // is a moment behind: retry every tick and show it as arriving, not a fault.
+                    if (level.getGameTime() - arrivedAt < ARRIVAL_PARK_TICKS) { status="Arriving"; nextParkAttempt=level.getGameTime()+1; }
+                    else nextParkAttempt=level.getGameTime()+20;
+                    owner.sync();
+                }
             } else if (!AUTO_PARK_ENABLED && !status.equals("Ready")) { status="Ready"; owner.sync(); }
             return;
         }
@@ -267,11 +273,25 @@ public final class ElevatorCabinMotion {
         for(Entity e:riders) ElevatorPassengerCollision.carry(e, step);
         owner.consume(ElevatorEnergyUsage.perTick(speed));
         if (Math.abs(target-y)<1e-6) {
-            status="Ready";
+            status="Ready"; arrivedAt=level.getGameTime();
             level.playSound(null,origin.getX()+0.5,y+0.5,origin.getZ()+0.5,
                     ElevatorSoundEvents.ARRIVAL.get(),net.minecraft.sounds.SoundSource.BLOCKS,1.0F,1.0F);
         } else status=step>0?"Going up":"Going down";
         owner.sync();
+    }
+    /** How long after arriving parking is retried every tick before a refusal is reported as a fault. */
+    private static final int ARRIVAL_PARK_TICKS = 40;
+    /**
+     * How far a player's feet may sink into the top of a part and still count as standing on it.
+     * Players report their own position a moment late, so on arrival the server can see a rider
+     * slightly inside the floor. Their client keeps them on top, so this must not block parking.
+     */
+    private static final double PLAYER_FEET_TOLERANCE = 0.5;
+    private long arrivedAt = Long.MIN_VALUE / 2;
+
+    private static boolean standsOn(Entity entity, AABB part) {
+        return entity instanceof net.minecraft.world.entity.player.Player
+                && entity.getBoundingBox().minY >= part.maxY - PLAYER_FEET_TOLERANCE;
     }
     public boolean disassemble() {
         Level level=owner.getLevel();
@@ -283,7 +303,7 @@ public final class ElevatorCabinMotion {
             VoxelShape shape=p.state.getCollisionShape(level,pos);
             for (AABB box : shape.toAabbs()) {
                 AABB worldBox=box.move(pos).deflate(1e-7);
-                if (!level.getEntities((Entity)null,worldBox,e -> e.isAlive() && !e.isSpectator()).isEmpty()) {
+                if (!level.getEntities((Entity)null,worldBox,e -> e.isAlive() && !e.isSpectator() && !standsOn(e,worldBox)).isEmpty()) {
                     status="Restoration blocked by entity";return false;
                 }
             }
