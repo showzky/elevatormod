@@ -4,8 +4,8 @@ import net.minecraft.world.level.Level;
 
 /**
  * Server-side request for a pulley to travel to a landing. Validates the landing against
- * fresh floor discovery, assembles a parked cabin when needed, then queues the stop with the
- * same rules as the Call Button and Elevator Controller.
+ * fresh floor discovery, closes doors and assembles a parked cabin when needed, then queues the
+ * stop. Touchscreens and Call Buttons both depart through here.
  */
 public final class ElevatorTravelRequest {
     public enum Result {
@@ -31,12 +31,18 @@ public final class ElevatorTravelRequest {
             boolean served = ElevatorFloorDiscovery.discover(level, pulley.getBlockPos(), scan.attachment(), scan.components())
                     .floors().stream().anyMatch(floor -> floor.attachmentY() == stop);
             if (!served) return Result.UNAVAILABLE;
-            if (scan.attachment().getY() == stop) return Result.ALREADY_HERE;
-            if (!motion.assemble()) return Result.BLOCKED;
+            if (scan.attachment().getY() == stop) {
+                // Called to the floor it is parked at: open up, as a real elevator does.
+                if (motion.doorSettings.autoOpen()) motion.openParkedDoors();
+                return Result.ALREADY_HERE;
+            }
+            // Closes any open doors first; the stop then departs from the call queue.
+            if (!motion.departWhenDoorsClosed(stop)) return Result.BLOCKED;
         } else if (motion.floors().stream().noneMatch(floor -> floor.y() == stop)) {
             return Result.UNAVAILABLE;
+        } else {
+            motion.request(stop);
         }
-        motion.request(stop);
         if (!motion.hasCall(stop)) return Result.ALREADY_HERE;
         return pulley.energy().getEnergyStored() < ElevatorEnergyUsage.perTick(motion.speed) ? Result.WAITING_POWER : Result.ACCEPTED;
     }

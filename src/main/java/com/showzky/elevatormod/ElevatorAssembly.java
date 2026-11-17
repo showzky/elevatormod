@@ -47,6 +47,10 @@ public final class ElevatorAssembly {
                         && state.getValue(FacingElevatorBlock.FACING) == direction) continue;
                 if (neighbour.is(ElevatorRegistries.FLOOR_CONNECTOR)
                         && neighbour.getValue(FacingElevatorBlock.FACING) == direction.getOpposite()) continue;
+                // Separate doors never join through each other, so a landing door built right in
+                // front of the cabin door stays at its landing.
+                if (state.is(ElevatorRegistries.DOOR) && neighbour.is(ElevatorRegistries.DOOR)
+                        && !ElevatorDoorBlock.sameDoor(current, state, next, neighbour)) continue;
                 if (isCabinComponent(neighbour)) {
                     visited.add(next);
                     if (visited.size() > MAX_COMPONENTS) return Result.fail("too_large");

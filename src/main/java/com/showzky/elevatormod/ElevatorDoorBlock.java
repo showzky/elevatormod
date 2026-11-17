@@ -78,29 +78,44 @@ public class ElevatorDoorBlock extends HorizontalDirectionalBlock implements Ent
     private static BlockPos position(BlockPos anchor, Direction facing, Part part) {
         return anchor.relative(facing.getClockWise(), part.right ? 1 : 0).above(part.upper ? 1 : 0);
     }
-    private static BlockPos anchor(BlockPos pos, BlockState state) {
+    /** The master (lower-left) cell of the door a cell belongs to. */
+    static BlockPos anchor(BlockPos pos, BlockState state) {
         Part part = state.getValue(PART);
         return pos.relative(state.getValue(FACING).getClockWise(), part.right ? -1 : 0).below(part.upper ? 1 : 0);
     }
-    private boolean belongs(BlockState state, Direction facing, Part part) {
-        return state.is(this) && state.getValue(FACING) == facing && state.getValue(PART) == part;
+    private static boolean belongs(BlockState state, Direction facing, Part part) {
+        return state.is(ElevatorRegistries.DOOR) && state.getValue(FACING) == facing && state.getValue(PART) == part;
+    }
+    /** Fully shut: not told to open and the panels have finished sliding closed. */
+    public static boolean isClosed(BlockState state) { return !state.getValue(OPEN) && state.getValue(FRAME) == 0; }
+    /** True when two door cells belong to the same two-by-two door. */
+    static boolean sameDoor(BlockPos a, BlockState stateA, BlockPos b, BlockState stateB) {
+        return stateA.getValue(FACING) == stateB.getValue(FACING) && anchor(a, stateA).equals(anchor(b, stateB));
+    }
+    /**
+     * Opens or closes the whole door a cell belongs to and starts its slide. Does nothing when the
+     * door is incomplete or partly unloaded. Shared by players and elevator door automation.
+     */
+    public static boolean setOpen(Level level, BlockPos cell, boolean open) {
+        BlockState state = level.getBlockState(cell);
+        if (!state.is(ElevatorRegistries.DOOR)) return false;
+        Direction facing = state.getValue(FACING);
+        BlockPos root = anchor(cell, state);
+        for (Part part : Part.values()) {
+            BlockPos member = position(root, facing, part);
+            if (!level.hasChunkAt(member) || !belongs(level.getBlockState(member), facing, part)) return false;
+        }
+        for (Part part : Part.values()) {
+            BlockPos member = position(root, facing, part);
+            level.setBlock(member, level.getBlockState(member).setValue(OPEN, open), 3);
+        }
+        level.scheduleTick(root, state.getBlock(), 1);
+        return true;
     }
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide) {
             BlockPos root = anchor(pos, state);
-            if (!level.hasChunkAt(root)) return InteractionResult.CONSUME;
-            BlockState rootState = level.getBlockState(root);
-            if (!belongs(rootState, state.getValue(FACING), Part.LOWER_LEFT)) return InteractionResult.CONSUME;
-            boolean open = !rootState.getValue(OPEN);
-            for (Part part : Part.values()) {
-                BlockPos member = position(root, state.getValue(FACING), part);
-                if (!level.hasChunkAt(member) || !belongs(level.getBlockState(member), state.getValue(FACING), part)) return InteractionResult.CONSUME;
-            }
-            for (Part part : Part.values()) {
-                BlockPos member = position(root, state.getValue(FACING), part);
-                level.setBlock(member, level.getBlockState(member).setValue(OPEN, open), 3);
-            }
-            level.scheduleTick(root, this, 1);
+            if (level.hasChunkAt(root)) setOpen(level, pos, !level.getBlockState(root).getValue(OPEN));
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

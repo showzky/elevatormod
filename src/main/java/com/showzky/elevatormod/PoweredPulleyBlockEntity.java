@@ -75,8 +75,10 @@ public class PoweredPulleyBlockEntity extends BlockEntity {
                 && pulley.directory.refresh(pulley)) pulley.sync();
         if (level.getGameTime() % 20 == 0) ElevatorLightPower.tick(pulley);
         if (pulley.motion.active()) { pulley.motion.tick(); return; }
-        if (level.getGameTime() % 20 == 0) pulley.motion.startQueuedCall();
+        // A pending call is usually waiting for doors to shut; check often so it departs promptly.
+        if (level.getGameTime() % (pulley.motion.hasQueuedCalls() ? 4 : 20) == 0) pulley.motion.startQueuedCall();
         if (pulley.motion.active()) return;
+        if (pulley.attachment != null) pulley.motion.parkedDoorTick();
         if (pulley.attachment == null || level.getGameTime() % 40 != 0) return;
         ElevatorAssembly.Result result = ElevatorAssembly.scan(level, pos);
         // An unloaded neighbouring chunk is not evidence that the cabin was dismantled.

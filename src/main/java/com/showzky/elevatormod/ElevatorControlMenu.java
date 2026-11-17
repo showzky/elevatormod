@@ -48,21 +48,13 @@ public final class ElevatorControlMenu extends AbstractContainerMenu {
   }
   var p=pulley();
   if(p!=null){next.putInt("Energy",p.energy().getEnergyStored());next.putInt("Capacity",p.energy().getMaxEnergyStored());next.putBoolean("Active",p.motion.active());next.putBoolean("Connected",p.attachment()!=null);next.putBoolean("CanTravel",p.motion.active());next.putDouble("Speed",p.motion.speed);next.putString("Status",p.motion.status);next.putDouble("Y",p.motion.y);next.putDouble("Target",p.motion.target);
-   ListTag floors=new ListTag();
-   if(p.motion.active()) {
-    for(var floor:p.motion.floors()){CompoundTag f=new CompoundTag();f.putInt("Y",floor.y());f.putString("Name",floor.name());floors.add(f);}
-   } else if(kind==2) {
-    var scan=ElevatorAssembly.scan(player.level(),p.getBlockPos());
-    if(scan.attachment()!=null){
-     next.putDouble("Y",scan.attachment().getY());next.putString("Status","Ready");next.putBoolean("CanTravel",true);
-     for(var floor:ElevatorFloorDiscovery.discover(player.level(),p.getBlockPos(),scan.attachment(),scan.components()).floors()){
-      CompoundTag f=new CompoundTag();f.putInt("Y",floor.attachmentY());
-      var be=player.level().getBlockEntity(floor.connector());String name=be instanceof FloorConnectorBlockEntity connector?connector.name:"";
-      f.putString("Name",name.isBlank()?"Floor Y="+floor.connector().getY():name);floors.add(f);
-     }
-    }
+   if(kind==2) {
+    // The controller is the elevator's settings panel: status, speed and door behaviour.
+    next.putInt("FloorCount",p.directory().floors().size());
+    next.putBoolean("AutoOpen",p.motion.doorSettings.autoOpen());
+    next.putBoolean("AutoClose",p.motion.doorSettings.autoClose());
+    next.putInt("CloseDelay",p.motion.doorSettings.closeDelaySeconds());
    }
-   next.put("Floors",floors);
   }else next.putString("Status","Not connected");
   if(!next.equals(state)){state=next;net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(server,new ElevatorControlPayload(containerId,"state",next));}
  }
@@ -70,6 +62,8 @@ public final class ElevatorControlMenu extends AbstractContainerMenu {
   if(!stillValid(player)||player.isSpectator())return;
   if(kind==1 && action.equals("name") && player.level().getBlockEntity(pos) instanceof FloorConnectorBlockEntity be){String value=data.getString("Name");if(value.length()<=48){be.name=value.strip().replaceAll("[\\p{Cntrl}]", "");be.setChanged();}}
   var p=pulley();if(p==null)return;
+  // Speed is one shared setting, adjustable from the pulley and from the controller.
+  if((kind==0 || kind==2) && action.equals("speed")){p.motion.speed=ElevatorEnergyUsage.sanitizeSpeed(data.getDouble("Speed"));p.setChanged();p.sync();}
   if(kind==0){
    // Connecting links the pulley and lists floors; the cabin stays as real blocks until it travels.
    if(action.equals("connect") && !p.motion.active()){
@@ -79,18 +73,13 @@ public final class ElevatorControlMenu extends AbstractContainerMenu {
     p.sync();
    }
    if(action.equals("park") && p.motion.active() && !p.motion.disassemble())p.sync();
-   if(action.equals("speed")){p.motion.speed=ElevatorEnergyUsage.sanitizeSpeed(data.getDouble("Speed"));p.setChanged();p.sync();}
   }
-  if(kind==2 && action.equals("travel")) {
-   int stop=data.getInt("Y");
-   if(!p.motion.active()) {
-    var scan=ElevatorAssembly.scan(player.level(),p.getBlockPos());
-    if(scan.attachment()==null || !scan.components().contains(pos) || ElevatorFloorDiscovery.discover(player.level(),p.getBlockPos(),scan.attachment(),scan.components()).floors().stream().noneMatch(f -> f.attachmentY()==stop)) {
-     player.displayClientMessage(Component.literal("Destination or cabin is no longer valid"),false);return;
-    }
-    if(!p.motion.assemble()) {p.sync();player.displayClientMessage(Component.literal(p.motion.status),false);return;}
-   }
-   p.motion.request(stop);
+  if(kind==2) {
+   var doors=p.motion.doorSettings;
+   if(action.equals("autoOpen")) doors=doors.withAutoOpen(data.getBoolean("Value"));
+   else if(action.equals("autoClose")) doors=doors.withAutoClose(data.getBoolean("Value"));
+   else if(action.equals("closeDelay")) doors=doors.withCloseDelay(data.getInt("Value"));
+   if(!doors.equals(p.motion.doorSettings)){p.motion.doorSettings=doors;p.setChanged();p.sync();}
   }
  }
 }

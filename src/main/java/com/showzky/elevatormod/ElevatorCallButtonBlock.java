@@ -33,15 +33,15 @@ public final class ElevatorCallButtonBlock extends FacingElevatorBlock {
             return InteractionResult.CONSUME;
         }
         var match=candidates.getFirst();var pulley=match.pulley();
-        if(!pulley.motion.active()) {
-            if(pulley.attachment().getY()==match.stop()) { player.displayClientMessage(net.minecraft.network.chat.Component.translatable("message.elevatormod.call_here"),true);return InteractionResult.CONSUME; }
-            if(!pulley.motion.assemble()) {player.displayClientMessage(net.minecraft.network.chat.Component.literal(pulley.motion.status),true);return InteractionResult.CONSUME;}
+        // Same departure rules as touchscreens, including closing doors before the cabin leaves.
+        switch(ElevatorTravelRequest.request(pulley,match.stop())) {
+            case ALREADY_HERE -> player.displayClientMessage(net.minecraft.network.chat.Component.translatable("message.elevatormod.call_here"),true);
+            case UNAVAILABLE, BLOCKED -> player.displayClientMessage(net.minecraft.network.chat.Component.literal(pulley.motion.status),true);
+            case ACCEPTED, WAITING_POWER -> {
+                level.setBlock(pos,state.setValue(POWERED,true),3);level.scheduleTick(pos,this,10);
+                player.displayClientMessage(net.minecraft.network.chat.Component.translatable(pulley.energy().getEnergyStored()<ElevatorEnergyUsage.perTick(pulley.motion.speed)?"message.elevatormod.call_waiting_power":"message.elevatormod.call_received",match.connector().getY()),true);
+            }
         }
-        pulley.motion.request(match.stop());
-        if(pulley.motion.hasCall(match.stop())) {
-            level.setBlock(pos,state.setValue(POWERED,true),3);level.scheduleTick(pos,this,10);
-            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(pulley.energy().getEnergyStored()<ElevatorEnergyUsage.perTick(pulley.motion.speed)?"message.elevatormod.call_waiting_power":"message.elevatormod.call_received",match.connector().getY()),true);
-        } else player.displayClientMessage(net.minecraft.network.chat.Component.translatable("message.elevatormod.call_here"),true);
         return InteractionResult.CONSUME;
     }
     @Override protected void tick(BlockState state,ServerLevel level,BlockPos pos,RandomSource random) {

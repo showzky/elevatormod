@@ -234,6 +234,8 @@ public final class ElevatorMovementTests {
   level.setBlock(origin.east(2),ElevatorRegistries.FLOOR_CONNECTOR.get().defaultBlockState().setValue(FacingElevatorBlock.FACING,Direction.WEST),3);
   level.setBlock(origin.east(2).above(3),ElevatorRegistries.FLOOR_CONNECTOR.get().defaultBlockState().setValue(FacingElevatorBlock.FACING,Direction.WEST),3);
   var pulley=(PoweredPulleyBlockEntity)level.getBlockEntity(pulleyPos);
+  // This test checks that door state survives parking unchanged; door automation has its own tests.
+  pulley.motion.doorSettings=ElevatorDoorSettings.DEFAULT.withAutoOpen(false);
   var scan=ElevatorAssembly.scan(level,pulleyPos);
   test.assertTrue(scan.attachment()!=null,"Stationary cabin must be detected");
   var discovered=ElevatorFloorDiscovery.discover(level,pulleyPos,scan.attachment(),scan.components());
@@ -310,11 +312,8 @@ public final class ElevatorMovementTests {
    var controllerState=level.getBlockState(controller);level.removeBlock(controller,false);
    test.assertTrue(!pulley.motion.assemble() && pulley.motion.status.contains("missing_controller"),"Damaged parked cabin must not assemble: "+pulley.motion.status);
    level.setBlock(controller,controllerState,3);
-   var player=net.neoforged.neoforge.common.util.FakePlayerFactory.getMinecraft(level);
-   player.setPos(controller.getX()+0.5,controller.getY(),controller.getZ()+0.5);
-   var menu=new ElevatorControlMenu(1,player.getInventory(),controller,2);
-   var request=new net.minecraft.nbt.CompoundTag();request.putInt("Y",origin.getY());menu.action("travel",request);
-   test.assertTrue(pulley.motion.active(),"Request from parked controller must assemble cabin");
+   test.assertTrue(ElevatorTravelRequest.request(pulley,origin.getY())==ElevatorTravelRequest.Result.ACCEPTED,"Request must be accepted: "+pulley.motion.status);
+   test.assertTrue(pulley.motion.active(),"Request for a parked cabin with closed doors must assemble it");
   });
   test.runAfterDelay(160,()->{
    test.assertTrue(Math.abs(pulley.motion.y-origin.getY())<0.001,"Cabin must return to lower connector");

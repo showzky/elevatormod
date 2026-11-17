@@ -15,7 +15,10 @@ public final class ElevatorClientRegistration {
     }
     @SubscribeEvent
     public static void registerScreens(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) {
-        event.register(ElevatorRegistries.OVERVIEW_MENU.get(), ElevatorControlScreen::new);
+        // The Elevator Controller (kind 2) has its own settings screen; the pulley and connector share one.
+        event.<ElevatorControlMenu, net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<ElevatorControlMenu>>register(
+                ElevatorRegistries.OVERVIEW_MENU.get(),
+                (menu, inventory, title) -> menu.kind == 2 ? new ElevatorControllerScreen(menu, inventory, title) : new ElevatorControlScreen(menu, inventory, title));
     }
     @SubscribeEvent
     public static void registerModels(net.neoforged.neoforge.client.event.ModelEvent.RegisterAdditional event) {

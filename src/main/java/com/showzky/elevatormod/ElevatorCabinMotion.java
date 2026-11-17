@@ -176,11 +176,9 @@ public final class ElevatorCabinMotion {
         if (level == null || level.isClientSide || active()) return false;
         var scan = ElevatorAssembly.scan(level, owner.getBlockPos());
         if (scan.attachment() == null) { status = "Assembly failed: " + scan.error(); return false; }
-        for (BlockPos pos : scan.components()) {
-            BlockState state = level.getBlockState(pos);
-            if (state.is(ElevatorRegistries.DOOR) && state.getValue(ElevatorDoorBlock.FRAME) != 0) { status="Close the cabin doors first"; return false; }
-        }
-        register(owner);
+        // Door interlock: the cabin never leaves with its own or its landing's doors open.
+        if (!ElevatorDoorControl.allClosed(level, ElevatorDoorControl.controlledDoors(level, scan.components()))) { status="Close the cabin doors first"; return false; }
+        register(owner); parkedDoors = null;
         owner.connect(scan); origin = scan.attachment(); y=previousY=target=origin.getY(); arrivedAt = Long.MIN_VALUE / 2;
         for (BlockPos pos : scan.components()) {
             var be = level.getBlockEntity(pos);
@@ -227,8 +225,71 @@ public final class ElevatorCabinMotion {
         var result=ElevatorFloorDiscovery.discover(level,owner.getBlockPos(),scan.attachment(),scan.components());
         if(result.floors().stream().noneMatch(f -> f.attachmentY()==stop)) {callQueue.removeFirst();status="Queued floor unavailable";owner.sync();return;}
         if(stop==scan.attachment().getY()) {callQueue.removeFirst();owner.sync();return;}
+        // Doors always close before departure, whatever the Auto Close setting.
+        var doors=ElevatorDoorControl.controlledDoors(level,scan.components());
+        if(!ElevatorDoorControl.allClosed(level,doors)) {
+            ElevatorDoorControl.setOpen(level,doors,false);
+            if(!status.equals("Closing doors")) {status="Closing doors";owner.sync();}
+            return;
+        }
         if(!assemble()) return;
         callQueue.removeFirst();request(stop);
+    }
+
+    public boolean hasQueuedCalls() { return !callQueue.isEmpty(); }
+
+    /**
+     * Starts a trip from a parked cabin. With any controlled door open, the doors are closed and the
+     * stop waits in the call queue; it departs once they are shut (see startQueuedCall).
+     * Returns false when the cabin cannot depart (the status says why).
+     */
+    public boolean departWhenDoorsClosed(int stop) {
+        Level level=owner.getLevel();
+        var scan=ElevatorAssembly.scan(level,owner.getBlockPos());
+        if(scan.attachment()==null) { status="Assembly failed: "+scan.error(); return false; }
+        var doors=ElevatorDoorControl.controlledDoors(level,scan.components());
+        if(!ElevatorDoorControl.allClosed(level,doors)) {
+            ElevatorDoorControl.setOpen(level,doors,false);
+            if(!callQueue.contains(stop)) callQueue.addLast(stop);
+            status="Closing doors"; owner.sync(); return true;
+        }
+        if(!assemble()) return false;
+        request(stop); return true;
+    }
+
+    /** Doors this parked cabin controls; rescanned periodically so added or removed doors are picked up. */
+    private @Nullable List<BlockPos> parkedDoors;
+    private long doorsOpenSince = -1;
+    private static final int PARKED_DOOR_RESCAN_TICKS = 100;
+    public ElevatorDoorSettings doorSettings = ElevatorDoorSettings.DEFAULT;
+
+    private List<BlockPos> parkedDoors() {
+        Level level=owner.getLevel();
+        if(parkedDoors==null || level.getGameTime()%PARKED_DOOR_RESCAN_TICKS==0) {
+            var scan=ElevatorAssembly.scan(level,owner.getBlockPos());
+            parkedDoors=scan.attachment()==null ? List.of() : ElevatorDoorControl.controlledDoors(level,scan.components());
+        }
+        return parkedDoors;
+    }
+
+    /** Opens the parked cabin's and landing's doors, e.g. when called to the floor it is already at. */
+    public void openParkedDoors() {
+        Level level=owner.getLevel();
+        ElevatorDoorControl.setOpen(level,parkedDoors(),true);
+        doorsOpenSince=level.getGameTime();
+    }
+
+    /** Auto Close: shuts open doors once they have been open for the configured delay. */
+    public void parkedDoorTick() {
+        Level level=owner.getLevel();
+        var doors=parkedDoors();
+        if(!ElevatorDoorControl.anyOpen(level,doors)) { doorsOpenSince=-1; return; }
+        long now=level.getGameTime();
+        if(doorsOpenSince<0) doorsOpenSince=now;
+        if(doorSettings.autoClose() && callQueue.isEmpty() && now-doorsOpenSince>=doorSettings.closeDelayTicks()) {
+            ElevatorDoorControl.setOpen(level,doors,false);
+            doorsOpenSince=-1;
+        }
     }
     public void tick() {
         Level level=owner.getLevel(); previousY=y;
@@ -314,11 +375,15 @@ public final class ElevatorCabinMotion {
             if(be!=null&&!p.data.isEmpty()){ CompoundTag data=p.data.copy();data.putInt("x",pos.getX());data.putInt("y",pos.getY());data.putInt("z",pos.getZ());be.loadWithComponents(data,level.registryAccess());be.setChanged(); }
         }
         parkedBounds=cabinBounds(at.getY()); parkedUntil=level.getGameTime()+PARKED_GRACE_TICKS;
-        parts.clear(); nextParkAttempt=0; status="Ready"; owner.arrived(at);return true;
+        List<BlockPos> restored=new ArrayList<>();for(Part p:parts) restored.add(at.offset(p.offset));
+        parkedDoors=ElevatorDoorControl.controlledDoors(level,restored);
+        parts.clear(); nextParkAttempt=0; status="Ready"; owner.arrived(at);
+        if(doorSettings.autoOpen()) openParkedDoors();
+        return true;
     }
     public void save(CompoundTag tag) {
         tag.putIntArray("CallQueue",callQueue.stream().mapToInt(Integer::intValue).toArray());
-        tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinVelocity",velocity);tag.putBoolean("CabinStalled",stalled);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);
+        tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinVelocity",velocity);tag.putBoolean("CabinStalled",stalled);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);doorSettings.save(tag);
         ListTag list=new ListTag();for(Part p:parts){CompoundTag t=new CompoundTag();t.putLong("Offset",p.offset.asLong());t.put("State",NbtUtils.writeBlockState(p.state));t.put("Data",p.data.copy());list.add(t);}tag.put("CabinParts",list);
     }
     /**
@@ -343,7 +408,7 @@ public final class ElevatorCabinMotion {
     }
     public void load(CompoundTag tag) {
         callQueue.clear();for(int stop:tag.getIntArray("CallQueue")) callQueue.addLast(stop);
-        nextParkAttempt=0;
+        nextParkAttempt=0; doorSettings=ElevatorDoorSettings.load(tag);
         origin=BlockPos.of(tag.getLong("CabinOrigin"));previousY=y;readPosition(tag);target=tag.getDouble("CabinTarget");speed=tag.contains("CabinSpeed")?ElevatorEnergyUsage.sanitizeSpeed(tag.getDouble("CabinSpeed")):ElevatorEnergyUsage.DEFAULT_SPEED;status=tag.getString("CabinStatus");if(!tag.contains("CabinParts"))return;parts.clear();
         for(Tag entry:tag.getList("CabinParts",10)){CompoundTag t=(CompoundTag)entry;parts.add(new Part(BlockPos.of(t.getLong("Offset")),NbtUtils.readBlockState(net.minecraft.core.registries.BuiltInRegistries.BLOCK.asLookup(),t.getCompound("State")),t.getCompound("Data")));}
     }
