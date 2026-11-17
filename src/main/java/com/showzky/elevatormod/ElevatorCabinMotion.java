@@ -383,18 +383,10 @@ public final class ElevatorCabinMotion {
             if(!level.noBlockCollision(null, swept)) { velocity=0;status="Obstructed near " + swept;syncMotion();return; }
         }
         stalled=false;
-        Set<Entity> riders=new HashSet<>();
-        for(VoxelShape shape:old) if(!shape.isEmpty()) {
-            AABB box=shape.bounds();
-            // Players move under their own client's control; each client carries its own player
-            // (ElevatorClientPassengerCarry). Moving them here causes corrections and fall-through.
-            for(Entity e:level.getEntities((Entity)null,box.inflate(0.05,0.15,0.05),e -> !e.isSpectator() && !(e instanceof net.minecraft.world.entity.player.Player))) {
-                if(Math.abs(e.getBoundingBox().minY-box.maxY)<0.15 && e.getDeltaMovement().y<=0.1) riders.add(e);
-            }
-        }
-        // Carry supported entities using ordinary movement, after exposing the next cabin position.
         y+=step;
-        for(Entity e:riders) ElevatorPassengerCollision.carry(e, step);
+        // Players move under their own client's control; each client carries its own player
+        // (ElevatorClientPassengerCarry). Moving them here causes corrections and fall-through.
+        ElevatorEntityMover.move(level, old, next, step, e -> !(e instanceof net.minecraft.world.entity.player.Player), Entity::getY);
         // The emergency descent runs on gravity under the brake and uses no energy.
         if(!emergency) owner.consume(ElevatorEnergyUsage.perTick(speed));
         if (Math.abs(target-y)<1e-6) {
@@ -449,13 +441,17 @@ public final class ElevatorCabinMotion {
         if(Math.abs(velocity)>1e-6 || Math.abs(y-Math.rint(y))>1e-6) { status="Stop at a floor first";return false; }
         BlockPos at=new BlockPos(origin.getX(),(int)Math.rint(y),origin.getZ());
         for(Part p:parts) if(!level.hasChunkAt(at.offset(p.offset)) || !level.getBlockState(at.offset(p.offset)).isAir()) {status="Restoration blocked";return false;}
+        // Players inside the cabin's blocks keep it from parking. Anything else (a mob, a stray
+        // butterfly, a dropped item) is lifted onto the block it overlaps, as Moving Elevators does.
+        Map<Entity, Double> lifted=new HashMap<>();
         for (Part p : parts) {
             BlockPos pos=at.offset(p.offset);
             VoxelShape shape=p.state.getCollisionShape(level,pos);
             for (AABB box : shape.toAabbs()) {
                 AABB worldBox=box.move(pos).deflate(1e-7);
-                if (!level.getEntities((Entity)null,worldBox,e -> e.isAlive() && !e.isSpectator() && !standsOn(e,worldBox)).isEmpty()) {
-                    status="Restoration blocked by entity";return false;
+                for (Entity e : level.getEntities((Entity)null,worldBox,e -> e.isAlive() && !e.isSpectator() && !standsOn(e,worldBox))) {
+                    if (e instanceof net.minecraft.world.entity.player.Player) { status="Restoration blocked by entity";return false; }
+                    if (!e.isPassenger()) lifted.merge(e, box.move(pos).maxY, Math::max);
                 }
             }
         }
@@ -464,6 +460,7 @@ public final class ElevatorCabinMotion {
             var be=level.getBlockEntity(pos);
             if(be!=null&&!p.data.isEmpty()){ CompoundTag data=p.data.copy();data.putInt("x",pos.getX());data.putInt("y",pos.getY());data.putInt("z",pos.getZ());be.loadWithComponents(data,level.registryAccess());be.setChanged(); }
         }
+        lifted.forEach((e, top) -> { e.setPos(e.getX(), top, e.getZ()); e.setDeltaMovement(e.getDeltaMovement().multiply(1, 0, 1)); });
         parkedBounds=cabinBounds(at.getY()); parkedUntil=level.getGameTime()+PARKED_GRACE_TICKS;
         List<BlockPos> restored=new ArrayList<>();for(Part p:parts) restored.add(at.offset(p.offset));
         parkedDoors=ElevatorDoorControl.controlledDoors(level,restored);

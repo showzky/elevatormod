@@ -20,5 +20,24 @@ public final class ElevatorClientCabinTicker {
         for (var pulley : ElevatorCabinMotion.loaded(minecraft.level)) pulley.motion.clientTick();
     }
 
+    /**
+     * After entities have ticked, keeps mobs and other players on the cabin where it is drawn.
+     * Their positions come from the server a few ticks late, so without this they trail below a
+     * rising cabin. Measured from where each stood at the start of the tick (xo/yo/zo). The local
+     * player is carried separately by ElevatorClientPassengerCarry.
+     */
+    @SubscribeEvent
+    public static void afterClientTick(ClientTickEvent.Post event) {
+        var minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.isPaused()) return;
+        for (var pulley : ElevatorCabinMotion.loaded(minecraft.level)) {
+            var motion = pulley.motion;
+            double step = motion.displayY - motion.displayPreviousY;
+            if (!motion.active() || step == 0) continue;
+            ElevatorEntityMover.move(minecraft.level, motion.shapes(motion.displayPreviousY), motion.shapes(motion.displayY), step,
+                    e -> !e.isControlledByLocalInstance(), e -> e.yo);
+        }
+    }
+
     private ElevatorClientCabinTicker() {}
 }

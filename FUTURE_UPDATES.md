@@ -54,8 +54,6 @@ tints beacon beams.
 
 ## Robustness
 
-### Cabin self-repair and chunk-border saving
-A cabin straddling a chunk border once lost the blocks in the neighbouring chunk across a save
-and reload. Ideas: keep the parked snapshot up to date on every park and restore missing blocks
-from it; show "Cabin damaged" instead of silently disconnecting; mark every touched chunk as
-changed together when assembling and parking.
+### Cabin damaged notice
+Self-repair after loading is done (1.0.98-alpha). Still open: when a cabin is broken while the
+world is running, show "Cabin damaged" on touchscreens instead of silently disconnecting.
