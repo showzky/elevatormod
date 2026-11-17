@@ -31,6 +31,7 @@ public final class TouchscreenDisplayPainter {
     private static final int AMBER = 0xFFFFB238, AMBER_DARK = 0xFF3A2808;
     private static final int BLUE = 0xFF4FB3FF, BLUE_DARK = 0xFF0E2A40;
     private static final int GREEN = 0xFF5CD67A, GREEN_DARK = 0xFF0F2E1A, RED = 0xFFFF5F52;
+    private static final int EMERGENCY_DARK = 0xFF2A0B0A, EMERGENCY_DIM = 0xFF7A2A25;
 
     private final Matrix4f matrix;
     private final MultiBufferSource buffers;
@@ -39,8 +40,12 @@ public final class TouchscreenDisplayPainter {
     private final float layerUnits;
     private final List<Runnable> text = new ArrayList<>();
 
-    private TouchscreenDisplayPainter(Matrix4f matrix, MultiBufferSource buffers, Font font, TouchscreenSize size) {
+    /** Emergency displays flash: on for half a second, off for half a second. */
+    private final boolean flashOn;
+
+    private TouchscreenDisplayPainter(Matrix4f matrix, MultiBufferSource buffers, Font font, TouchscreenSize size, long gameTime) {
         this.matrix = matrix; this.buffers = buffers; this.font = font; this.size = size;
+        this.flashOn = (gameTime / 10) % 2 == 0;
         this.layerUnits = LAYER * size.unitsPerBlock;
     }
 
@@ -58,7 +63,7 @@ public final class TouchscreenDisplayPainter {
                 TouchscreenSize.GLASS_DEPTH_PIXELS / 16F + LAYER);
         float scale = 1F / size.unitsPerBlock;
         pose.scale(scale, -scale, scale);
-        var painter = new TouchscreenDisplayPainter(pose.last().pose(), buffers, Minecraft.getInstance().font, size);
+        var painter = new TouchscreenDisplayPainter(pose.last().pose(), buffers, Minecraft.getInstance().font, size, gameTime);
         painter.draw(settings, state, settings.activeFeedback(gameTime));
         pose.popPose();
     }
@@ -69,11 +74,14 @@ public final class TouchscreenDisplayPainter {
         fill(0, 0, width, height, 0, BACKGROUND);
         fill(0, 0, width, m.header(), 1, HEADER);
         fill(0, m.header(), width, m.header() + 0.75F, 2, DIVIDER);
-        fill(0, 0, width, size == TouchscreenSize.LARGE ? 2 : 1.5F, 2, connectionColor(state.connection()));
+        boolean emergency = state.status() == TouchscreenDisplayState.Status.EMERGENCY;
+        fill(0, 0, width, size == TouchscreenSize.LARGE ? 2 : 1.5F, 2, emergency ? statusColor(state.status()) : connectionColor(state.connection()));
         var layout = TouchscreenLayout.compute(size, settings.mode(), state, settings.page());
         header(settings.mode(), state, feedback);
         if (m.footer() > 0) footer(settings.mode(), state, feedback);
         if (!state.linked()) message(layout.body(), Component.translatable(state.connection().translationKey()), connectionColor(state.connection()));
+        // Floors cannot be chosen while the cabin lowers itself without power; say what is happening.
+        else if (emergency) emergencyNotice(layout.body());
         else switch (settings.mode()) {
             case DESTINATION -> floorList(layout, state, true);
             case INFORMATION -> {
@@ -215,6 +223,13 @@ public final class TouchscreenDisplayPainter {
         }
     }
 
+    /** A red, flashing notice filling the body while the cabin lowers itself after losing power. */
+    private void emergencyNotice(TouchscreenLayout.Rect body) {
+        fill(body.x(), body.y(), body.x() + body.w(), body.y() + body.h(), 1, EMERGENCY_DARK);
+        if (flashOn) frame(body, 0.75F, RED);
+        message(body, Component.translatable("touchscreen.elevatormod.emergency_notice"), RED);
+    }
+
     private void travelArrows(float x, float y, float width, float height, TouchscreenDisplayState.Travel travel) {
         float s = width, cx = x + width / 2;
         triangle(cx, y + height * 0.28F, s, true, travel == TouchscreenDisplayState.Travel.UP ? AMBER : DIM);
@@ -233,11 +248,12 @@ public final class TouchscreenDisplayPainter {
         };
     }
 
-    private static int statusColor(TouchscreenDisplayState.Status status) {
+    private int statusColor(TouchscreenDisplayState.Status status) {
         return switch (status) {
             case READY -> GREEN;
             case MOVING -> AMBER;
             case NO_POWER, FAULT -> RED;
+            case EMERGENCY -> flashOn ? RED : EMERGENCY_DIM;
         };
     }
 

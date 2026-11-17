@@ -133,7 +133,8 @@ public final class ElevatorTouchscreenTests {
         test.assertTrue(!pulley.motion.active(), "A touch beside the screen must be ignored");
 
         TouchscreenInteraction.touch(aimAt(level, tileCenter(screen, 0), Direction.EAST), screen);
-        test.assertTrue(pulley.motion.active() && (int) pulley.motion.target == origin.getY() + 3, "Destination touch must request the upper floor");
+        // Without power the cabin stays parked with the trip queued (it departs once powered).
+        test.assertTrue(!pulley.motion.active() && pulley.motion.hasCall(origin.getY() + 3), "Destination touch must request the upper floor");
         test.assertTrue(screen.settings().feedback() == TouchscreenSettings.Feedback.WAITING_POWER, "Unpowered request must report waiting for power");
         var moving = screen.displayState();
         test.assertTrue(moving.destinationIndex() == 0 && moving.travel() == TouchscreenDisplayState.Travel.UP, "Display must show the destination and direction");
@@ -155,7 +156,7 @@ public final class ElevatorTouchscreenTests {
         test.assertTrue(!pulley.motion.active() && lower.settings().feedback() == TouchscreenSettings.Feedback.ALREADY_HERE, "Calling to the current landing must report already here");
 
         TouchscreenInteraction.touch(aimAt(level, callButtonCenter(upper), Direction.EAST), upper);
-        test.assertTrue(pulley.motion.active() && pulley.motion.hasCall(origin.getY() + 3), "Call button must call the elevator to the upper landing");
+        test.assertTrue(!pulley.motion.active() && pulley.motion.hasCall(origin.getY() + 3), "Call button must call the elevator to the upper landing");
         test.assertTrue(upper.displayState().callPending(), "Display must show the pending call");
         test.succeed();
     }

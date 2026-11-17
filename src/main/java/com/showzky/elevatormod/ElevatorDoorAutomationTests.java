@@ -13,7 +13,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(ElevatorMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ElevatorDoorAutomationTests {
-    private static final int TRAVEL = 3;
+    static final int TRAVEL = 3;
 
     @GameTest(template = "empty", batch = "door_settings")
     public static void settingsDefaultClampAndPersist(GameTestHelper test) {
@@ -122,7 +122,7 @@ public final class ElevatorDoorAutomationTests {
      * door facing north beside the pillar, and a matching landing door directly behind it at the
      * start and at the destination three floors up.
      */
-    private record DoorCabin(PoweredPulleyBlockEntity pulley, BlockPos base) {
+    record DoorCabin(PoweredPulleyBlockEntity pulley, BlockPos base) {
         static DoorCabin build(GameTestHelper test) {
             var level = test.getLevel();
             // Low enough that the pulley stays below the test area's barrier ceiling.

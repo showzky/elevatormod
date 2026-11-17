@@ -92,6 +92,50 @@ public final class ElevatorSpeedTests {
         test.succeed();
     }
 
+    @GameTest(template = "empty", batch = "speed_correction")
+    public static void clientOnlyCorrectsForwards(GameTestHelper test) {
+        BlockPos origin = test.absolutePos(new BlockPos(3, 2, 3));
+        var pulley = ElevatorTouchscreenTests.elevator(test, origin);
+        var client = new ElevatorCabinMotion(pulley);
+        client.parts.add(new ElevatorCabinMotion.Part(BlockPos.ZERO, ElevatorRegistries.ATTACHMENT.get().defaultBlockState(), new net.minecraft.nbt.CompoundTag()));
+        client.y = 10;
+        BlockPos at = pulley.getBlockPos();
+        client.applyServerMotion(new ElevatorMotionPayload(at, 10.5, 0.5, 20, false, "Going up", 0.5, false));
+        test.assertTrue(Math.abs(client.pendingCorrection() - 0.5) < 1e-9, "A server position ahead must be blended in");
+        client.applyServerMotion(new ElevatorMotionPayload(at, 9.5, 0.5, 20, false, "Going up", 0.5, false));
+        test.assertTrue(client.pendingCorrection() == 0, "A server position behind must not pull the cabin back");
+        client.applyServerMotion(new ElevatorMotionPayload(at, 9.5, 0, 20, true, "Waiting for FE", 0.5, false));
+        test.assertTrue(Math.abs(client.pendingCorrection() + 0.5) < 1e-9, "A held cabin must settle where the server holds it");
+        client.applyServerMotion(new ElevatorMotionPayload(at, 10.5, -0.5, 0, false, "Going down", 0.5, false));
+        test.assertTrue(client.pendingCorrection() == 0, "Going down, a server position above is behind and must be ignored");
+        client.applyServerMotion(new ElevatorMotionPayload(at, 30, 0.5, 40, false, "Going up", 0.5, false));
+        test.assertTrue(client.y == 30 && client.pendingCorrection() == 0, "A teleport-sized gap must snap");
+
+        var buffer = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        var sent = new ElevatorMotionPayload(at, 12.25, -0.75, 3, true, "Obstructed", 0.6, true);
+        ElevatorMotionPayload.STREAM_CODEC.encode(buffer, sent);
+        test.assertTrue(ElevatorMotionPayload.STREAM_CODEC.decode(buffer).equals(sent), "The motion update must survive encoding");
+        test.succeed();
+    }
+
+    @GameTest(template = "empty", batch = "speed_obstruction", timeoutTicks = 100)
+    public static void blockInPathStopsTheCabin(GameTestHelper test) {
+        BlockPos origin = test.absolutePos(new BlockPos(3, 2, 3));
+        // Only the leading face of the cabin is checked; the controller beside the attachment leads going up.
+        BlockPos obstacle = origin.west().above(2);
+        var pulley = startThreeFloorTrip(test, ElevatorEnergyUsage.MAX_SPEED);
+        test.getLevel().setBlock(obstacle, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 3);
+        test.runAfterDelay(40, () -> {
+            test.assertTrue(pulley.motion.active() && pulley.motion.status.startsWith("Obstructed"),
+                    "A block in the path must stop the cabin: " + pulley.motion.status);
+            // The controller's shape ends 14/16 of a block above its base; it must stop just under the block.
+            double controllerTop = pulley.motion.y + 14 / 16.0;
+            test.assertTrue(controllerTop <= obstacle.getY() + 1e-6 && controllerTop > obstacle.getY() - 0.5,
+                    "The cabin must stop right below the block, controller top " + (controllerTop - obstacle.getY()) + " from it");
+            test.succeed();
+        });
+    }
+
     private static PoweredPulleyBlockEntity startThreeFloorTrip(GameTestHelper test, double speed) {
         BlockPos origin = test.absolutePos(new BlockPos(3, 2, 3));
         var pulley = ElevatorTouchscreenTests.elevator(test, origin);

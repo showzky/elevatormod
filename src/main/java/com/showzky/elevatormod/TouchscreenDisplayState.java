@@ -27,7 +27,7 @@ public record TouchscreenDisplayState(Connection connection, List<FloorEntry> fl
     }
     public enum Travel { UP, DOWN, IDLE }
     public enum Status {
-        READY, MOVING, NO_POWER, FAULT;
+        READY, MOVING, NO_POWER, FAULT, EMERGENCY;
         public String translationKey() { return "touchscreen.elevatormod.status." + name().toLowerCase(Locale.ROOT); }
     }
     /** A landing, listed top floor first. */
@@ -52,6 +52,8 @@ public record TouchscreenDisplayState(Connection connection, List<FloorEntry> fl
         var motion = pulley.motion;
         double y = motion.active() ? motion.y : pulley.attachment().getY();
         boolean moving = motion.active() && Math.abs(motion.target - y) > 1e-6;
+        // A parked cabin about to leave (closing doors, waiting for power) already shows where it is going.
+        Integer departing = motion.active() ? null : motion.nextQueuedStop();
         List<ElevatorFloorDirectory.Floor> sorted = new ArrayList<>(pulley.directory().floors());
         sorted.sort(Comparator.comparingInt(ElevatorFloorDirectory.Floor::stop).reversed());
         List<FloorEntry> floors = new ArrayList<>(sorted.size());
@@ -63,10 +65,11 @@ public record TouchscreenDisplayState(Connection connection, List<FloorEntry> fl
             double distance = Math.abs(floor.stop() - y);
             // While travelling the nearest landing is shown, as on a real position indicator.
             if (distance < closest && (moving || distance < 1e-3)) { closest = distance; current = i; }
-            if (moving && floor.stop() == (int) motion.target) destination = i;
+            if (moving ? floor.stop() == (int) motion.target : departing != null && floor.stop() == departing) destination = i;
             if (floor.stop() == callStop) call = i;
         }
-        Travel travel = !moving ? Travel.IDLE : motion.target > y ? Travel.UP : Travel.DOWN;
+        double heading = moving ? motion.target : departing != null ? departing : y;
+        Travel travel = Math.abs(heading - y) < 1e-6 ? Travel.IDLE : heading > y ? Travel.UP : Travel.DOWN;
         Status status = statusOf(motion.status);
         if (status == Status.READY && moving) status = Status.MOVING;
         boolean pending = callStop != NO_STOP && motion.hasCall(callStop);
@@ -76,6 +79,7 @@ public record TouchscreenDisplayState(Connection connection, List<FloorEntry> fl
     private static Status statusOf(String status) {
         String text = status.toLowerCase(Locale.ROOT);
         if (text.startsWith("waiting for fe")) return Status.NO_POWER;
+        if (text.startsWith("emergency")) return Status.EMERGENCY;
         if (text.contains("obstruct") || text.contains("unavailable") || text.contains("blocked")
                 || text.contains("failed") || text.contains("close the cabin")) return Status.FAULT;
         return Status.READY;

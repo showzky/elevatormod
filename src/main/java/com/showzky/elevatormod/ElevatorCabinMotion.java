@@ -107,14 +107,41 @@ public final class ElevatorCabinMotion {
     public static List<PoweredPulleyBlockEntity> loaded(Level level) { return LOADED.getOrDefault(level, Set.of()).stream().filter(p -> !p.isRemoved() && level.hasChunkAt(p.getBlockPos())).toList(); }
     public boolean active() { return !parts.isEmpty(); }
 
+    private int[] leadingUp, leadingDown;
+    private int leadingPartCount = -1;
+
+    /**
+     * Indices of the parts that lead the cabin in a direction of travel: those with no other part
+     * directly in front of them. Only these can meet a block in the shaft, since every other part
+     * moves into space a leading part has already cleared. Checking just this face keeps the
+     * obstruction check cheap for large cabins (Moving Elevators skips it entirely for speed).
+     */
+    private int[] leadingParts(boolean up) {
+        if (leadingPartCount != parts.size()) {
+            Set<BlockPos> offsets = new HashSet<>();
+            for (Part part : parts) offsets.add(part.offset);
+            List<Integer> upward = new ArrayList<>(), downward = new ArrayList<>();
+            for (int i = 0; i < parts.size(); i++) {
+                BlockPos offset = parts.get(i).offset;
+                if (!offsets.contains(offset.above())) upward.add(i);
+                if (!offsets.contains(offset.below())) downward.add(i);
+            }
+            leadingUp = upward.stream().mapToInt(Integer::intValue).toArray();
+            leadingDown = downward.stream().mapToInt(Integer::intValue).toArray();
+            leadingPartCount = parts.size();
+        }
+        return up ? leadingUp : leadingDown;
+    }
+
     /**
      * Updates the velocity and returns this tick's movement towards a destination, using Create's
      * elevator profile: accelerate towards the set speed, then brake at the same rate so the
      * cabin stops exactly at the landing. Shared by server movement and client simulation.
      */
     private double nextStep(double remaining) {
-        double acceleration = ElevatorEnergyUsage.acceleration(speed);
-        double desired = Math.copySign(Math.min(speed, Math.sqrt(2 * acceleration * Math.abs(remaining))), remaining);
+        double travelSpeed = travelSpeed();
+        double acceleration = ElevatorEnergyUsage.acceleration(travelSpeed);
+        double desired = Math.copySign(Math.min(travelSpeed, Math.sqrt(2 * acceleration * Math.abs(remaining))), remaining);
         velocity += Math.clamp(desired - velocity, -acceleration, acceleration);
         return Math.copySign(Math.min(Math.abs(velocity), Math.abs(remaining)), remaining);
     }
@@ -178,7 +205,7 @@ public final class ElevatorCabinMotion {
         if (scan.attachment() == null) { status = "Assembly failed: " + scan.error(); return false; }
         // Door interlock: the cabin never leaves with its own or its landing's doors open.
         if (!ElevatorDoorControl.allClosed(level, ElevatorDoorControl.controlledDoors(level, scan.components()))) { status="Close the cabin doors first"; return false; }
-        register(owner); parkedDoors = null;
+        register(owner); parkedDoors = null; leadingPartCount = -1;
         owner.connect(scan); origin = scan.attachment(); y=previousY=target=origin.getY(); arrivedAt = Long.MIN_VALUE / 2;
         for (BlockPos pos : scan.components()) {
             var be = level.getBlockEntity(pos);
@@ -225,6 +252,7 @@ public final class ElevatorCabinMotion {
         var result=ElevatorFloorDiscovery.discover(level,owner.getBlockPos(),scan.attachment(),scan.components());
         if(result.floors().stream().noneMatch(f -> f.attachmentY()==stop)) {callQueue.removeFirst();status="Queued floor unavailable";owner.sync();return;}
         if(stop==scan.attachment().getY()) {callQueue.removeFirst();owner.sync();return;}
+        if(!hasPowerToMove()) { if(!status.equals("Waiting for FE")) {status="Waiting for FE";owner.sync();} return; }
         // Doors always close before departure, whatever the Auto Close setting.
         var doors=ElevatorDoorControl.controlledDoors(level,scan.components());
         if(!ElevatorDoorControl.allClosed(level,doors)) {
@@ -237,6 +265,33 @@ public final class ElevatorCabinMotion {
     }
 
     public boolean hasQueuedCalls() { return !callQueue.isEmpty(); }
+    /** The stop a parked cabin will depart for next (waiting for doors or power), or null. */
+    public @Nullable Integer nextQueuedStop() { return callQueue.peekFirst(); }
+
+    /** Status shown while lowering without power; touchscreens show it as an emergency. */
+    public static final String EMERGENCY_STATUS = "Emergency descent";
+    /** Lowering speed without power: 1 block per second, like a brake-controlled rescue descent. */
+    public static final double EMERGENCY_SPEED = ElevatorEnergyUsage.blocksPerTick(1);
+    /** True while the cabin lowers itself to a floor after losing power. */
+    public boolean emergency;
+
+    private double travelSpeed() { return emergency ? Math.min(speed, EMERGENCY_SPEED) : speed; }
+    private boolean hasPowerToMove() { return owner.energy().getEnergyStored() >= ElevatorEnergyUsage.perTick(speed); }
+
+    /**
+     * Out of power mid-trip: brake to a stop, then lower on gravity to the nearest floor at or below
+     * the cabin, where it parks and opens its doors, so nobody is left stuck in the shaft.
+     * Returns false when there is no floor below to lower to.
+     */
+    private boolean beginEmergencyDescent() {
+        int floorBelow = Integer.MIN_VALUE;
+        for (Floor floor : floors()) if (floor.y() <= y + 1e-6 && floor.y() > floorBelow) floorBelow = floor.y();
+        if (floorBelow == Integer.MIN_VALUE) return false;
+        emergency = true; velocity = 0; target = floorBelow; stalled = false;
+        callQueue.clear();
+        status = EMERGENCY_STATUS; syncMotion();
+        return true;
+    }
 
     /**
      * Starts a trip from a parked cabin. With any controlled door open, the doors are closed and the
@@ -248,6 +303,11 @@ public final class ElevatorCabinMotion {
         var scan=ElevatorAssembly.scan(level,owner.getBlockPos());
         if(scan.attachment()==null) { status="Assembly failed: "+scan.error(); return false; }
         var doors=ElevatorDoorControl.controlledDoors(level,scan.components());
+        if(!hasPowerToMove()) {
+            // Waits parked, doors untouched, until there is power; then departs from the queue.
+            if(!callQueue.contains(stop)) callQueue.addLast(stop);
+            status="Waiting for FE"; owner.sync(); return true;
+        }
         if(!ElevatorDoorControl.allClosed(level,doors)) {
             ElevatorDoorControl.setOpen(level,doors,false);
             if(!callQueue.contains(stop)) callQueue.addLast(stop);
@@ -302,22 +362,25 @@ public final class ElevatorCabinMotion {
                     // is a moment behind: retry every tick and show it as arriving, not a fault.
                     if (level.getGameTime() - arrivedAt < ARRIVAL_PARK_TICKS) { status="Arriving"; nextParkAttempt=level.getGameTime()+1; }
                     else nextParkAttempt=level.getGameTime()+20;
-                    owner.sync();
+                    syncMotion();
                 }
             } else if (!AUTO_PARK_ENABLED && !status.equals("Ready")) { status="Ready"; owner.sync(); }
             return;
         }
         stalled=true;
-        if(owner.energy().getEnergyStored()<ElevatorEnergyUsage.perTick(speed)) { velocity=0; status="Waiting for FE"; owner.sync(); return; }
+        if(!emergency && owner.energy().getEnergyStored()<ElevatorEnergyUsage.perTick(speed)) {
+            if(!beginEmergencyDescent()) { velocity=0; status="Waiting for FE"; syncMotion(); }
+            return;
+        }
         double step=nextStep(remaining);
         List<VoxelShape> old=shapes(y), next=shapes(y+step);
-        for(int i=0;i<next.size();i++) {
+        for(int i:leadingParts(step>0)) {
             if(next.get(i).isEmpty()) continue;
             AABB swept=next.get(i).bounds().minmax(old.get(i).bounds()).deflate(1e-7);
             for(BlockPos pos:BlockPos.betweenClosed(BlockPos.containing(swept.minX,swept.minY,swept.minZ),BlockPos.containing(swept.maxX,swept.maxY,swept.maxZ))) {
-                if(!level.hasChunkAt(pos)||level.isOutsideBuildHeight(pos)) { velocity=0;status="Travel area unavailable";owner.sync();return; }
+                if(!level.hasChunkAt(pos)||level.isOutsideBuildHeight(pos)) { velocity=0;status="Travel area unavailable";syncMotion();return; }
             }
-            if(!level.noBlockCollision(null, swept)) { velocity=0;status="Obstructed near " + swept;owner.sync();return; }
+            if(!level.noBlockCollision(null, swept)) { velocity=0;status="Obstructed near " + swept;syncMotion();return; }
         }
         stalled=false;
         Set<Entity> riders=new HashSet<>();
@@ -332,13 +395,40 @@ public final class ElevatorCabinMotion {
         // Carry supported entities using ordinary movement, after exposing the next cabin position.
         y+=step;
         for(Entity e:riders) ElevatorPassengerCollision.carry(e, step);
-        owner.consume(ElevatorEnergyUsage.perTick(speed));
+        // The emergency descent runs on gravity under the brake and uses no energy.
+        if(!emergency) owner.consume(ElevatorEnergyUsage.perTick(speed));
         if (Math.abs(target-y)<1e-6) {
             status="Ready"; arrivedAt=level.getGameTime();
             level.playSound(null,origin.getX()+0.5,y+0.5,origin.getZ()+0.5,
                     ElevatorSoundEvents.ARRIVAL.get(),net.minecraft.sounds.SoundSource.BLOCKS,1.0F,1.0F);
-        } else status=step>0?"Going up":"Going down";
-        owner.sync();
+        } else status=emergency?EMERGENCY_STATUS:step>0?"Going up":"Going down";
+        syncMotion();
+    }
+
+    /** Ticks between routine motion updates to clients; state changes are sent at once. */
+    private static final int MOTION_SYNC_INTERVAL = 5;
+    private long nextMotionSync;
+    private String sentStatus = "";
+    private boolean sentStalled, sentEmergency;
+    private double sentTarget = Double.NaN, sentSpeed = Double.NaN;
+
+    /**
+     * Tells nearby clients where the cabin is. Clients simulate the movement themselves, so a small
+     * update every few ticks is enough; a change of status, target, speed or stall is sent at once.
+     * The pulley's full data (with every cabin block) is only sent on assembly and parking.
+     */
+    private void syncMotion() {
+        owner.setChanged();
+        if (!(owner.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) return;
+        boolean changed = !status.equals(sentStatus) || stalled != sentStalled || target != sentTarget || speed != sentSpeed || emergency != sentEmergency;
+        if (!changed && level.getGameTime() < nextMotionSync) return;
+        nextMotionSync = level.getGameTime() + MOTION_SYNC_INTERVAL;
+        sentStatus = status; sentStalled = stalled; sentTarget = target; sentSpeed = speed; sentEmergency = emergency;
+        var update = new ElevatorMotionPayload(owner.getBlockPos(), y, velocity, target, stalled, status, speed, emergency);
+        // Only to players whose game accepts it: a client without this mod (or a test player)
+        // would otherwise make the server throw.
+        for (var player : level.getChunkSource().chunkMap.getPlayers(new net.minecraft.world.level.ChunkPos(owner.getBlockPos()), false))
+            if (player.connection.hasChannel(update)) net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, update);
     }
     /** How long after arriving parking is retried every tick before a refusal is reported as a fault. */
     private static final int ARRIVAL_PARK_TICKS = 40;
@@ -377,13 +467,14 @@ public final class ElevatorCabinMotion {
         parkedBounds=cabinBounds(at.getY()); parkedUntil=level.getGameTime()+PARKED_GRACE_TICKS;
         List<BlockPos> restored=new ArrayList<>();for(Part p:parts) restored.add(at.offset(p.offset));
         parkedDoors=ElevatorDoorControl.controlledDoors(level,restored);
-        parts.clear(); nextParkAttempt=0; status="Ready"; owner.arrived(at);
-        if(doorSettings.autoOpen()) openParkedDoors();
+        parts.clear(); leadingPartCount=-1; nextParkAttempt=0; status="Ready"; owner.arrived(at);
+        if(doorSettings.autoOpen() || emergency) openParkedDoors();
+        emergency=false;
         return true;
     }
     public void save(CompoundTag tag) {
         tag.putIntArray("CallQueue",callQueue.stream().mapToInt(Integer::intValue).toArray());
-        tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinVelocity",velocity);tag.putBoolean("CabinStalled",stalled);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);doorSettings.save(tag);
+        tag.putLong("CabinOrigin",origin.asLong()); tag.putDouble("CabinY",y);tag.putDouble("CabinVelocity",velocity);tag.putBoolean("CabinStalled",stalled);tag.putDouble("CabinTarget",target);tag.putDouble("CabinSpeed",speed);tag.putString("CabinStatus",status);doorSettings.save(tag);tag.putBoolean("CabinEmergency",emergency);
         ListTag list=new ListTag();for(Part p:parts){CompoundTag t=new CompoundTag();t.putLong("Offset",p.offset.asLong());t.put("State",NbtUtils.writeBlockState(p.state));t.put("Data",p.data.copy());list.add(t);}tag.put("CabinParts",list);
     }
     /**
@@ -396,20 +487,43 @@ public final class ElevatorCabinMotion {
         stalled = tag.getBoolean("CabinStalled");
         Level level = owner.getLevel();
         boolean simulating = level != null && level.isClientSide && active() && tag.contains("CabinParts")
-                && !tag.getList("CabinParts", 10).isEmpty() && Math.abs(serverY - y) <= CLIENT_SNAP_DISTANCE;
-        if (simulating) {
-            clientCorrection = serverY - y;
-            if (stalled) velocity = 0;
-        } else {
+                && !tag.getList("CabinParts", 10).isEmpty();
+        if (simulating) correctTowards(serverY, tag.getDouble("CabinVelocity"));
+        else {
             y = serverY;
             velocity = tag.getDouble("CabinVelocity");
             clientCorrection = 0;
         }
     }
+
+    /** Client: applies a server motion update to the simulated cabin. */
+    public void applyServerMotion(ElevatorMotionPayload update) {
+        if (update.emergency() && !emergency) velocity = update.velocity();
+        target = update.target(); speed = update.speed(); status = update.status(); stalled = update.stalled(); emergency = update.emergency();
+        if (!active()) { y = update.y(); velocity = update.velocity(); clientCorrection = 0; return; }
+        correctTowards(update.y(), update.velocity());
+    }
+
+    /**
+     * Blends the server's position into the client simulation. Like Moving Elevators, only
+     * corrections that move the cabin forward are taken, so riders are never pulled back against
+     * the direction of travel. A held cabin settles exactly where the server holds it, and a
+     * teleport-sized gap snaps.
+     */
+    private void correctTowards(double serverY, double serverVelocity) {
+        double gap = serverY - y;
+        if (Math.abs(gap) > CLIENT_SNAP_DISTANCE) { y = serverY; velocity = serverVelocity; clientCorrection = 0; return; }
+        if (stalled) { velocity = 0; clientCorrection = gap; return; }
+        double direction = Math.signum(target - y);
+        clientCorrection = direction == 0 || gap * direction > 0 ? gap : 0;
+    }
+
+    /** The server position still to be blended in on the client (for tests). */
+    double pendingCorrection() { return clientCorrection; }
     public void load(CompoundTag tag) {
         callQueue.clear();for(int stop:tag.getIntArray("CallQueue")) callQueue.addLast(stop);
-        nextParkAttempt=0; doorSettings=ElevatorDoorSettings.load(tag);
-        origin=BlockPos.of(tag.getLong("CabinOrigin"));previousY=y;readPosition(tag);target=tag.getDouble("CabinTarget");speed=tag.contains("CabinSpeed")?ElevatorEnergyUsage.sanitizeSpeed(tag.getDouble("CabinSpeed")):ElevatorEnergyUsage.DEFAULT_SPEED;status=tag.getString("CabinStatus");if(!tag.contains("CabinParts"))return;parts.clear();
+        nextParkAttempt=0; doorSettings=ElevatorDoorSettings.load(tag); emergency=tag.getBoolean("CabinEmergency");
+        origin=BlockPos.of(tag.getLong("CabinOrigin"));previousY=y;target=tag.getDouble("CabinTarget");readPosition(tag);speed=tag.contains("CabinSpeed")?ElevatorEnergyUsage.sanitizeSpeed(tag.getDouble("CabinSpeed")):ElevatorEnergyUsage.DEFAULT_SPEED;status=tag.getString("CabinStatus");if(!tag.contains("CabinParts"))return;parts.clear();leadingPartCount=-1;
         for(Tag entry:tag.getList("CabinParts",10)){CompoundTag t=(CompoundTag)entry;parts.add(new Part(BlockPos.of(t.getLong("Offset")),NbtUtils.readBlockState(net.minecraft.core.registries.BuiltInRegistries.BLOCK.asLookup(),t.getCompound("State")),t.getCompound("Data")));}
     }
 }

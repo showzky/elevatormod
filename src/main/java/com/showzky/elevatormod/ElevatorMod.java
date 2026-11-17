@@ -14,6 +14,7 @@ public class ElevatorMod {
         ElevatorSoundEvents.register(bus);
         bus.addListener(ElevatorControlPayload::register);
         bus.addListener(TouchscreenNetwork::register);
+        bus.addListener(ElevatorMotionPayload::register);
         bus.addListener(this::registerCapabilities);
     }
 

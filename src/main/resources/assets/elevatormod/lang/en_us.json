@@ -87,6 +87,8 @@
   "touchscreen.elevatormod.status.moving": "MOVING",
   "touchscreen.elevatormod.status.no_power": "NO POWER",
   "touchscreen.elevatormod.status.fault": "FAULT",
+  "touchscreen.elevatormod.status.emergency": "EMERGENCY DESCENT",
+  "touchscreen.elevatormod.emergency_notice": "POWER LOST\nLowering to the nearest floor. Doors open on arrival.",
   "touchscreen.elevatormod.current": "CURRENT",
   "touchscreen.elevatormod.current_floor": "CURRENT FLOOR",
   "touchscreen.elevatormod.destination": "DESTINATION",

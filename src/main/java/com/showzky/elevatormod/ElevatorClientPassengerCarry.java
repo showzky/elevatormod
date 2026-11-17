@@ -1,5 +1,6 @@
 package com.showzky.elevatormod;
 
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
@@ -40,13 +41,41 @@ public final class ElevatorClientPassengerCarry {
             // Ignore no movement and teleport-sized jumps (reloads of the cabin data). Bunched
             // updates at high speed move the cabin several blocks in one tick and must still carry.
             if (Math.abs(delta) < 1e-7 || Math.abs(delta) > ElevatorCabinMotion.CLIENT_SNAP_DISTANCE) continue;
-            if (player.isPassenger() || player.isSpectator() || player.getAbilities().flying) continue;
+            if (player.isPassenger() || player.isSpectator()) continue;
             // A descending cabin can drop away from a rider faster than gravity pulls them down,
             // so on the way down a rider slightly above the floor is still carried with it.
             double reach = STANDING_TOLERANCE + Math.max(0, -delta);
-            if (standingOn(motion, previous, player.getBoundingBox(), reach) && player.getDeltaMovement().y <= 0.1)
+            if (!player.getAbilities().flying && standingOn(motion, previous, player.getBoundingBox(), reach) && player.getDeltaMovement().y <= 0.1)
                 ElevatorPassengerCollision.carry(player, delta);
+            else pushAhead(motion, previous, player, delta);
         }
+    }
+
+    /**
+     * A cabin that moves into a player who is not riding it pushes them along its direction of
+     * travel: below its floor when it descends onto them, on top when it rises into them. Like
+     * Moving Elevators, the player is placed there directly; if that is inside the ground, the
+     * game's own stuck-in-a-block handling squeezes them out sideways, instead of the cabin ending
+     * up around them. Only overlaps this movement created count, so a player already inside a
+     * part is not flung out.
+     */
+    private static void pushAhead(ElevatorCabinMotion motion, double previousY, LocalPlayer player, double delta) {
+        AABB body = player.getBoundingBox().deflate(1e-7);
+        List<VoxelShape> before = motion.shapes(previousY), now = motion.shapes(motion.y);
+        double push = 0;
+        for (int i = 0; i < now.size(); i++) {
+            VoxelShape shape = now.get(i);
+            if (shape.isEmpty() || !shape.bounds().intersects(body)) continue;
+            if (!before.get(i).isEmpty() && before.get(i).bounds().intersects(body)) continue;
+            AABB part = shape.bounds();
+            double needed = delta < 0 ? part.minY - body.maxY : part.maxY - body.minY;
+            if (delta < 0 ? needed < push : needed > push) push = needed;
+        }
+        if (push == 0) return;
+        player.setPos(player.getX(), player.getY() + push, player.getZ());
+        // Keep up with a descending cabin instead of being caught again next tick.
+        if (delta < 0 && player.getDeltaMovement().y > delta)
+            player.setDeltaMovement(player.getDeltaMovement().x, delta, player.getDeltaMovement().z);
     }
 
     private static boolean standingOn(ElevatorCabinMotion motion, double cabinY, AABB feet, double reach) {
